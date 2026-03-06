@@ -72,7 +72,7 @@
 
 ## 📄 开源协议
 
-MIT License
+Apache-2.0 license
 
 欢迎 PR、Issue、Star ～  
 也欢迎志同道合的朋友一起把 AI 短剧生产工具做成行业标杆！

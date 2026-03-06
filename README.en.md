@@ -73,7 +73,7 @@ Prototype in planning:
 
 ## 📄 License
 
-MIT License
+Apache-2.0 license
 
 PRs, issues, and stars are welcome.  
 Also welcome collaborators who want to build an industry-leading AI short drama production tool together.
