@@ -18,9 +18,9 @@ export type PropImageRead = {
      */
     view_angle?: AssetViewAngle;
     /**
-     * 图片 URL
+     * 关联的 FileItem ID
      */
-    url: string;
+    file_id: string;
     /**
      * 宽(px)
      */

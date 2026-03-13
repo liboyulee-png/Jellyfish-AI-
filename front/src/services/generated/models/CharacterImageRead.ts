@@ -4,7 +4,7 @@
 /* eslint-disable */
 import type { AssetQualityLevel } from './AssetQualityLevel';
 import type { AssetViewAngle } from './AssetViewAngle';
-export type ActorImageImageRead = {
+export type CharacterImageRead = {
     /**
      * 图片行 ID
      */
@@ -37,6 +37,6 @@ export type ActorImageImageRead = {
      * 是否主图
      */
     is_primary?: boolean;
-    actor_image_id: string;
+    character_id: string;
 };
 

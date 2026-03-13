@@ -10,9 +10,12 @@ import type { ApiResponse_TaskResultRead_ } from '../models/ApiResponse_TaskResu
 import type { ApiResponse_TaskStatusRead_ } from '../models/ApiResponse_TaskStatusRead_';
 import type { EntityExtractRequest } from '../models/EntityExtractRequest';
 import type { EntityExtractTaskRequest } from '../models/EntityExtractTaskRequest';
+import type { ImageGenerationTaskRequest } from '../models/ImageGenerationTaskRequest';
+import type { ShotFramePromptRequest } from '../models/ShotFramePromptRequest';
 import type { ShotlistExtractRequest } from '../models/ShotlistExtractRequest';
 import type { ShotlistExtractTaskRequest } from '../models/ShotlistExtractTaskRequest';
 import type { TaskLinkAdoptRequest } from '../models/TaskLinkAdoptRequest';
+import type { VideoGenerationTaskRequest } from '../models/VideoGenerationTaskRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
@@ -92,6 +95,68 @@ export class FilmService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/v1/film/tasks/shotlist',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * 视频生成（任务版）
+     * 创建视频生成任务并后台执行，结果通过 /tasks/{task_id}/result 获取。
+     * @returns ApiResponse_TaskCreated_ Successful Response
+     * @throws ApiError
+     */
+    public static createVideoGenerationTaskApiV1FilmTasksVideoPost({
+        requestBody,
+    }: {
+        requestBody: VideoGenerationTaskRequest,
+    }): CancelablePromise<ApiResponse_TaskCreated_> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/film/tasks/video',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * 图片生成（任务版）
+     * 创建图片生成任务并后台执行，结果通过 /tasks/{task_id}/result 获取。
+     * @returns ApiResponse_TaskCreated_ Successful Response
+     * @throws ApiError
+     */
+    public static createImageGenerationTaskApiV1FilmTasksImagesPost({
+        requestBody,
+    }: {
+        requestBody: ImageGenerationTaskRequest,
+    }): CancelablePromise<ApiResponse_TaskCreated_> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/film/tasks/images',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * 镜头分镜帧提示词生成（任务版）
+     * @returns ApiResponse_TaskCreated_ Successful Response
+     * @throws ApiError
+     */
+    public static createShotFramePromptTaskApiV1FilmTasksShotFramePromptsPost({
+        requestBody,
+    }: {
+        requestBody: ShotFramePromptRequest,
+    }): CancelablePromise<ApiResponse_TaskCreated_> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/film/tasks/shot-frame-prompts',
             body: requestBody,
             mediaType: 'application/json',
             errors: {

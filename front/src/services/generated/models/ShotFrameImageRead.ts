@@ -2,21 +2,20 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { AssetQualityLevel } from './AssetQualityLevel';
-import type { AssetViewAngle } from './AssetViewAngle';
-export type ActorImageImageRead = {
+import type { ShotFrameType } from './ShotFrameType';
+export type ShotFrameImageRead = {
     /**
      * 图片行 ID
      */
     id: number;
     /**
-     * 精度等级
+     * 所属镜头细节 ID
      */
-    quality_level?: AssetQualityLevel;
+    shot_detail_id: string;
     /**
-     * 视角
+     * 帧类型：first/last/key
      */
-    view_angle?: AssetViewAngle;
+    frame_type: ShotFrameType;
     /**
      * 关联的 FileItem ID
      */
@@ -33,10 +32,5 @@ export type ActorImageImageRead = {
      * 格式
      */
     format?: string;
-    /**
-     * 是否主图
-     */
-    is_primary?: boolean;
-    actor_image_id: string;
 };
 

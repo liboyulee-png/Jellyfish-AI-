@@ -1,0 +1,640 @@
+import { useEffect, useState, useMemo } from 'react'
+import {
+  Layout,
+  Input,
+  Button,
+  Table,
+  Tag,
+  Space,
+  Tree,
+  Card,
+  Dropdown,
+  Drawer,
+  Modal,
+  Form,
+  Select,
+  Switch,
+  message,
+  Tooltip,
+  Empty,
+  Grid,
+} from 'antd'
+import type { TableColumnsType } from 'antd'
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  StarOutlined,
+  StarFilled,
+  CopyOutlined,
+  MenuOutlined,
+  AppstoreOutlined,
+  UnorderedListOutlined,
+  DownOutlined,
+  RightOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons'
+import { LlmService } from '../../../services/generated/services/LlmService'
+import type { ModelRead, ModelCategoryKey, ProviderRead } from '../../../services/generated'
+import {
+  MODEL_CATEGORIES,
+  categoryLabelMap,
+  categoryColorMap,
+  SORT_OPTIONS,
+  maskUrl,
+} from './constants'
+
+export default function ModelsTab() {
+  const [providers, setProviders] = useState<ProviderRead[]>([])
+  const [models, setModels] = useState<ModelRead[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState<'updated' | 'name' | 'category'>('updated')
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('table')
+  const [selectedModel, setSelectedModel] = useState<ModelRead | null>(null)
+  const [detailPanelOpen, setDetailPanelOpen] = useState(false)
+  const [treeCollapsed, setTreeCollapsed] = useState(false)
+  const [categoryFilter, setCategoryFilter] = useState<ModelCategoryKey | null>(null)
+  const [modelModalOpen, setModelModalOpen] = useState(false)
+  const [modelEditing, setModelEditing] = useState<ModelRead | null>(null)
+  const [form] = Form.useForm()
+  const { lg } = Grid.useBreakpoint()
+  const isLargeScreen = lg ?? false
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const [provRes, modelsRes] = await Promise.all([
+        LlmService.listProvidersApiV1LlmProvidersGet({ page: 1, pageSize: 100 }),
+        LlmService.listModelsApiV1LlmModelsGet({
+          q: search.trim() || undefined,
+          order: sortBy === 'name' ? 'name' : sortBy === 'category' ? 'category' : 'updated_at',
+          isDesc: true,
+          page: 1,
+          pageSize: 100,
+        }),
+      ])
+      setProviders(provRes.data?.items ?? [])
+      setModels(modelsRes.data?.items ?? [])
+    } catch {
+      message.error('加载失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [search, sortBy])
+
+  const modelList = useMemo(() => {
+    let list = models
+    if (categoryFilter) list = list.filter((m) => m.category === categoryFilter)
+    return list
+  }, [models, categoryFilter])
+
+  const categoryCounts = useMemo(() => {
+    const c: Record<string, number> = {}
+    MODEL_CATEGORIES.forEach((cat) => {
+      c[cat.key] = models.filter((m) => m.category === cat.key).length
+    })
+    return c
+  }, [models])
+
+  const treeData = useMemo(
+    () =>
+      MODEL_CATEGORIES.map((c) => ({
+        key: c.key,
+        title: `${c.label} (${categoryCounts[c.key] ?? 0})`,
+        isLeaf: true,
+      })),
+    [categoryCounts]
+  )
+
+  const getProviderName = (id: string) => providers.find((p) => p.id === id)?.name ?? id
+
+  const handleSaveModel = async () => {
+    try {
+      const values = await form.validateFields()
+      let params: Record<string, unknown> = {}
+      try {
+        if (values.params && String(values.params).trim())
+          params = JSON.parse(String(values.params))
+      } catch {
+        message.error('参数格式需为合法 JSON')
+        return
+      }
+      if (modelEditing) {
+        await LlmService.updateModelApiV1LlmModelsModelIdPatch({
+          modelId: modelEditing.id,
+          requestBody: {
+            name: values.name,
+            category: values.category,
+            provider_id: values.provider_id,
+            description: values.description ?? null,
+            params,
+            is_default: values.is_default,
+          },
+        })
+        message.success('模型已更新')
+      } else {
+        if (!values.provider_id) {
+          message.warning('请先添加供应商后再添加模型')
+          return
+        }
+        const modelId =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `model_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+        await LlmService.createModelApiV1LlmModelsPost({
+          requestBody: {
+            id: modelId,
+            name: values.name,
+            category: values.category,
+            provider_id: values.provider_id,
+            description: values.description,
+            params,
+            is_default: values.is_default,
+          },
+        })
+        message.success('模型已添加')
+      }
+      setModelModalOpen(false)
+      setModelEditing(null)
+      form.resetFields()
+      void load()
+    } catch (e) {
+      if (e && typeof e === 'object' && 'errorFields' in e) return
+      message.error('保存失败')
+    }
+  }
+
+  const handleSetDefaultModel = (model: ModelRead) => {
+    Modal.confirm({
+      title: '设为默认',
+      content: '此操作将替换当前该类别的默认模型。',
+      onOk: async () => {
+        await LlmService.updateModelApiV1LlmModelsModelIdPatch({
+          modelId: model.id,
+          requestBody: { is_default: true },
+        })
+        message.success('已设为默认')
+        void load()
+        if (selectedModel?.id === model.id) setSelectedModel({ ...model, is_default: true })
+      },
+    })
+  }
+
+  const handleDeleteModel = (m: ModelRead) => {
+    Modal.confirm({
+      title: '删除模型',
+      content: `确定删除「${m.name}」？`,
+      okText: '删除',
+      okType: 'danger',
+      onOk: async () => {
+        await LlmService.deleteModelApiV1LlmModelsModelIdDelete({ modelId: m.id })
+        message.success('已删除')
+        if (selectedModel?.id === m.id) setSelectedModel(null)
+        void load()
+      },
+    })
+  }
+
+  const openModelModal = (m?: ModelRead) => {
+    setModelEditing(m ?? null)
+    if (m) {
+      form.setFieldsValue({
+        name: m.name,
+        category: m.category,
+        provider_id: m.provider_id,
+        description: m.description,
+        params: JSON.stringify(m.params ?? {}, null, 2),
+        is_default: m.is_default ?? false,
+      })
+    } else {
+      form.resetFields()
+      form.setFieldsValue({ category: 'text', is_default: false })
+    }
+    setModelModalOpen(true)
+  }
+
+  const modelColumns: TableColumnsType<ModelRead> = [
+    {
+      title: '名称',
+      dataIndex: 'name',
+      key: 'name',
+      ellipsis: true,
+      render: (n, r) => (
+        <Space>
+          {r.is_default && <StarFilled style={{ color: '#faad14' }} />}
+          {n}
+        </Space>
+      ),
+    },
+    {
+      title: '类别',
+      dataIndex: 'category',
+      key: 'category',
+      width: 100,
+      render: (c: ModelCategoryKey) => (
+        <Tag color={categoryColorMap[c]}>{categoryLabelMap[c]}</Tag>
+      ),
+    },
+    {
+      title: '关联供应商',
+      dataIndex: 'provider_id',
+      key: 'provider_id',
+      width: 120,
+      render: (id: string) => getProviderName(id),
+    },
+    {
+      title: '参数',
+      dataIndex: 'params',
+      key: 'params',
+      ellipsis: true,
+      render: (p: Record<string, unknown>) => (
+        <Tooltip title={JSON.stringify(p)}>
+          <span>
+            {p && Object.keys(p).length ? JSON.stringify(p).slice(0, 30) + '…' : '—'}
+          </span>
+        </Tooltip>
+      ),
+    },
+    {
+      title: '描述',
+      dataIndex: 'description',
+      key: 'description',
+      ellipsis: true,
+      render: (d: string) => <Tooltip title={d}>{d || '—'}</Tooltip>,
+    },
+    {
+      title: '默认',
+      dataIndex: 'is_default',
+      key: 'is_default',
+      width: 70,
+      render: (isDefault: boolean, record) =>
+        isDefault ? (
+          <StarFilled style={{ color: '#faad14' }} />
+        ) : (
+          <StarOutlined
+            className="text-gray-400 hover:text-amber-500 cursor-pointer"
+            onClick={() => handleSetDefaultModel(record)}
+          />
+        ),
+    },
+    {
+      title: '创建人',
+      dataIndex: 'created_by',
+      key: 'created_by',
+      width: 100,
+      render: (c: string) => c || '—',
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 180,
+      render: (_, record) => (
+        <Space size="small">
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openModelModal(record)}>
+            编辑
+          </Button>
+          <Button type="link" size="small" icon={<ThunderboltOutlined />}>
+            测试生成
+          </Button>
+          <Dropdown
+            menu={{
+              items: [
+                { key: 'copy', label: '复制', icon: <CopyOutlined /> },
+                {
+                  key: 'delete',
+                  label: '删除',
+                  danger: true,
+                  icon: <DeleteOutlined />,
+                  onClick: () => handleDeleteModel(record),
+                },
+              ],
+            }}
+            trigger={['click']}
+          >
+            <Button type="link" size="small" icon={<MenuOutlined />} />
+          </Dropdown>
+        </Space>
+      ),
+    },
+  ]
+
+  return (
+    <>
+      <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600 text-sm">共 {models.length} 个模型</span>
+        </div>
+        <Space wrap>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openModelModal()}>
+            添加模型
+          </Button>
+          <Input
+            placeholder="搜索名称/类型"
+            allowClear
+            className="w-48"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <Dropdown
+            menu={{
+              items: SORT_OPTIONS.map((o) => ({
+                key: o.value,
+                label: o.label,
+                onClick: () => setSortBy(o.value as 'updated' | 'name' | 'category'),
+              })),
+            }}
+          >
+            <Button icon={<DownOutlined />}>
+              排序：{SORT_OPTIONS.find((s) => s.value === sortBy)?.label}
+            </Button>
+          </Dropdown>
+        </Space>
+      </div>
+
+      <Layout className="flex-1 min-h-0 flex-row overflow-hidden">
+        <div
+          className="flex-shrink-0 border-r border-gray-200 bg-white overflow-auto"
+          style={{ width: treeCollapsed ? 48 : 200 }}
+        >
+          {treeCollapsed ? (
+            <Button
+              type="text"
+              icon={<RightOutlined />}
+              onClick={() => setTreeCollapsed(false)}
+              className="w-full rounded-none"
+            />
+          ) : (
+            <>
+              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+                <span className="text-sm font-medium text-gray-700">筛选</span>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<RightOutlined rotate={180} />}
+                  onClick={() => setTreeCollapsed(true)}
+                />
+              </div>
+              <Tree
+                selectedKeys={categoryFilter ? [categoryFilter] : []}
+                treeData={treeData}
+                showLine
+                blockNode
+                onSelect={([key]) => setCategoryFilter(key ? (key as ModelCategoryKey) : null)}
+                className="py-2"
+              />
+            </>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0 overflow-auto p-4 bg-gray-50">
+          <div className="flex justify-end gap-1 mb-2">
+            <Button
+              type={viewMode === 'table' ? 'primary' : 'default'}
+              size="small"
+              icon={<UnorderedListOutlined />}
+              onClick={() => setViewMode('table')}
+            />
+            <Button
+              type={viewMode === 'card' ? 'primary' : 'default'}
+              size="small"
+              icon={<AppstoreOutlined />}
+              onClick={() => setViewMode('card')}
+            />
+          </div>
+
+          {modelList.length === 0 ? (
+            <Card>
+              <Empty
+                description={
+                  models.length === 0 ? '暂无模型，请先添加供应商再添加模型' : '无匹配结果'
+                }
+              >
+                {providers.length > 0 && models.length === 0 && (
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => openModelModal()}>
+                    添加第一个模型
+                  </Button>
+                )}
+              </Empty>
+            </Card>
+          ) : viewMode === 'table' ? (
+            <Card>
+              <Table<ModelRead>
+                rowKey="id"
+                loading={loading}
+                columns={modelColumns}
+                dataSource={modelList}
+                pagination={{ pageSize: 20 }}
+                onRow={(record) => ({
+                  onClick: () => {
+                    setSelectedModel(record)
+                    setDetailPanelOpen(true)
+                  },
+                  style: { cursor: 'pointer' },
+                })}
+                size="small"
+              />
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {modelList.map((m) => (
+                <Card
+                  key={m.id}
+                  hoverable
+                  className="cursor-pointer"
+                  style={{ minHeight: 220 }}
+                  onClick={() => {
+                    setSelectedModel(m)
+                    setDetailPanelOpen(true)
+                  }}
+                  actions={[
+                    <Button
+                      key="edit"
+                      type="text"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openModelModal(m)
+                      }}
+                    >
+                      编辑
+                    </Button>,
+                    <Button key="test" type="text" size="small" icon={<ThunderboltOutlined />}>
+                      测试生成
+                    </Button>,
+                    <Dropdown
+                      key="more"
+                      menu={{
+                        items: [
+                          {
+                            key: 'delete',
+                            label: '删除',
+                            danger: true,
+                            onClick: () => handleDeleteModel(m),
+                          },
+                        ],
+                      }}
+                      trigger={['click']}
+                    >
+                      <Button type="text" size="small" onClick={(e) => e.stopPropagation()}>
+                        更多
+                      </Button>
+                    </Dropdown>,
+                  ]}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Tag color={categoryColorMap[m.category]}>{categoryLabelMap[m.category]}</Tag>
+                    {m.is_default && <StarFilled style={{ color: '#faad14' }} />}
+                  </div>
+                  <div className="font-medium mb-1">{m.name}</div>
+                  <div className="text-gray-500 text-sm mb-1">
+                    供应商：{getProviderName(m.provider_id)}
+                  </div>
+                  <div className="text-gray-500 text-sm line-clamp-2 mb-2">{m.description || '—'}</div>
+                  {m.created_by && (
+                    <span className="text-xs text-gray-400">创建：{m.created_by}</span>
+                  )}
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {selectedModel && isLargeScreen && (
+          <div
+            className="flex-shrink-0 overflow-auto border-l border-gray-200 bg-white"
+            style={{ width: '36%', minWidth: 320 }}
+          >
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <span className="font-medium">详情</span>
+              <Button
+                type="link"
+                size="small"
+                onClick={() => {
+                  setDetailPanelOpen(false)
+                  setSelectedModel(null)
+                }}
+              >
+                收起
+              </Button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <div className="text-sm text-gray-500 mb-1">名称</div>
+                <div className="font-medium">{selectedModel.name}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500 mb-1">类别</div>
+                <Tag color={categoryColorMap[selectedModel.category]}>
+                  {categoryLabelMap[selectedModel.category]}
+                </Tag>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500 mb-1">关联供应商</div>
+                <div>{getProviderName(selectedModel.provider_id)}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500 mb-1">描述</div>
+                <div className="text-gray-700 text-sm">{selectedModel.description || '—'}</div>
+              </div>
+              <Space>
+                <Button
+                  type="primary"
+                  icon={<EditOutlined />}
+                  onClick={() => openModelModal(selectedModel)}
+                >
+                  编辑
+                </Button>
+                <Button icon={<ThunderboltOutlined />}>快速测试</Button>
+              </Space>
+            </div>
+          </div>
+        )}
+
+        {selectedModel && !isLargeScreen && (
+          <Drawer
+            title="详情"
+            placement="right"
+            open={detailPanelOpen}
+            onClose={() => setDetailPanelOpen(false)}
+            width="min(100%, 400px)"
+          >
+            <div className="space-y-4">
+              <div>
+                <div className="text-sm text-gray-500 mb-1">名称</div>
+                <div className="font-medium">{selectedModel.name}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500 mb-1">类别</div>
+                <Tag color={categoryColorMap[selectedModel.category]}>
+                  {categoryLabelMap[selectedModel.category]}
+                </Tag>
+              </div>
+              <Space>
+                <Button
+                  type="primary"
+                  icon={<EditOutlined />}
+                  onClick={() => openModelModal(selectedModel)}
+                >
+                  编辑
+                </Button>
+                <Button icon={<ThunderboltOutlined />}>快速测试</Button>
+              </Space>
+            </div>
+          </Drawer>
+        )}
+      </Layout>
+
+      <Modal
+        title={modelEditing ? '编辑模型' : '添加模型'}
+        open={modelModalOpen}
+        onCancel={() => {
+          setModelModalOpen(false)
+          setModelEditing(null)
+          form.resetFields()
+        }}
+        onOk={() => void handleSaveModel()}
+        width={560}
+        destroyOnClose
+      >
+        <Form form={form} layout="vertical" className="pt-2">
+          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+            <Input placeholder="例如：GPT-4" />
+          </Form.Item>
+          <Form.Item name="category" label="类别" rules={[{ required: true }]}>
+            <Select options={MODEL_CATEGORIES.map((c) => ({ label: c.label, value: c.key }))} />
+          </Form.Item>
+          <Form.Item
+            name="provider_id"
+            label="关联供应商"
+            rules={[{ required: true, message: '请选择供应商' }]}
+          >
+            <Select
+              placeholder="选择供应商（请先添加供应商）"
+              options={providers.map((p) => ({ label: p.name, value: p.id }))}
+            />
+          </Form.Item>
+          <Form.Item name="params" label="参数（JSON）">
+            <Input.TextArea rows={3} placeholder='{"max_tokens": 4096, "temperature": 0.7}' />
+          </Form.Item>
+          <Form.Item name="description" label="描述">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item
+            name="is_default"
+            label="设为该类别默认"
+            valuePropName="checked"
+            initialValue={false}
+          >
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
+  )
+}

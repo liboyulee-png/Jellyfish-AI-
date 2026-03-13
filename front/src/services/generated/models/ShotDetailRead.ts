@@ -55,5 +55,17 @@ export type ShotDetailRead = {
      * 视效说明
      */
     vfx_note?: string;
+    /**
+     * 镜头分镜首帧提示词
+     */
+    first_frame_prompt?: string;
+    /**
+     * 镜头分镜尾帧提示词
+     */
+    last_frame_prompt?: string;
+    /**
+     * 镜头分镜关键帧提示词
+     */
+    key_frame_prompt?: string;
 };
 

@@ -4,7 +4,7 @@
 /* eslint-disable */
 import type { TextChunkInput } from './TextChunkInput';
 /**
- * 分镜抽取任务请求：创建任务并绑定到 project/chapter/shot。
+ * 分镜抽取任务请求：在抽取参数基础上增加绑定目标。
  */
 export type ShotlistExtractTaskRequest = {
     /**

@@ -18,5 +18,8 @@ export type ShotDetailUpdate = {
     has_bgm?: (boolean | null);
     vfx_type?: (VFXType | null);
     vfx_note?: (string | null);
+    first_frame_prompt?: (string | null);
+    last_frame_prompt?: (string | null);
+    key_frame_prompt?: (string | null);
 };
 

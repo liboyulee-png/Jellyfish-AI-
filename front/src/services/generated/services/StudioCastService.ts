@@ -5,14 +5,18 @@
 import type { ActorCreate } from '../models/ActorCreate';
 import type { ActorUpdate } from '../models/ActorUpdate';
 import type { ApiResponse_ActorRead_ } from '../models/ApiResponse_ActorRead_';
+import type { ApiResponse_CharacterImageRead_ } from '../models/ApiResponse_CharacterImageRead_';
 import type { ApiResponse_CharacterPropLinkRead_ } from '../models/ApiResponse_CharacterPropLinkRead_';
 import type { ApiResponse_CharacterRead_ } from '../models/ApiResponse_CharacterRead_';
 import type { ApiResponse_NoneType_ } from '../models/ApiResponse_NoneType_';
 import type { ApiResponse_PaginatedData_ActorRead__ } from '../models/ApiResponse_PaginatedData_ActorRead__';
+import type { ApiResponse_PaginatedData_CharacterImageRead__ } from '../models/ApiResponse_PaginatedData_CharacterImageRead__';
 import type { ApiResponse_PaginatedData_CharacterPropLinkRead__ } from '../models/ApiResponse_PaginatedData_CharacterPropLinkRead__';
 import type { ApiResponse_PaginatedData_CharacterRead__ } from '../models/ApiResponse_PaginatedData_CharacterRead__';
 import type { ApiResponse_PaginatedData_ShotCharacterLinkRead__ } from '../models/ApiResponse_PaginatedData_ShotCharacterLinkRead__';
 import type { ApiResponse_ShotCharacterLinkRead_ } from '../models/ApiResponse_ShotCharacterLinkRead_';
+import type { AssetImageCreate } from '../models/AssetImageCreate';
+import type { AssetImageUpdate } from '../models/AssetImageUpdate';
 import type { CharacterCreate } from '../models/CharacterCreate';
 import type { CharacterPropLinkCreate } from '../models/CharacterPropLinkCreate';
 import type { CharacterPropLinkUpdate } from '../models/CharacterPropLinkUpdate';
@@ -479,6 +483,118 @@ export class StudioCastService {
             url: '/api/v1/studio/cast/shot-character-links/{link_id}',
             path: {
                 'link_id': linkId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * 角色图片列表（分页）
+     * @returns ApiResponse_PaginatedData_CharacterImageRead__ Successful Response
+     * @throws ApiError
+     */
+    public static listCharacterImagesApiV1StudioCastCharactersCharacterIdImagesGet({
+        characterId,
+        order,
+        isDesc = false,
+        page = 1,
+        pageSize = 10,
+    }: {
+        characterId: string,
+        order?: (string | null),
+        isDesc?: boolean,
+        page?: number,
+        pageSize?: number,
+    }): CancelablePromise<ApiResponse_PaginatedData_CharacterImageRead__> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/studio/cast/characters/{character_id}/images',
+            path: {
+                'character_id': characterId,
+            },
+            query: {
+                'order': order,
+                'is_desc': isDesc,
+                'page': page,
+                'page_size': pageSize,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * 创建角色图片
+     * @returns ApiResponse_CharacterImageRead_ Successful Response
+     * @throws ApiError
+     */
+    public static createCharacterImageApiV1StudioCastCharactersCharacterIdImagesPost({
+        characterId,
+        requestBody,
+    }: {
+        characterId: string,
+        requestBody: AssetImageCreate,
+    }): CancelablePromise<ApiResponse_CharacterImageRead_> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/studio/cast/characters/{character_id}/images',
+            path: {
+                'character_id': characterId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * 更新角色图片
+     * @returns ApiResponse_CharacterImageRead_ Successful Response
+     * @throws ApiError
+     */
+    public static updateCharacterImageApiV1StudioCastCharactersCharacterIdImagesImageIdPatch({
+        characterId,
+        imageId,
+        requestBody,
+    }: {
+        characterId: string,
+        imageId: number,
+        requestBody: AssetImageUpdate,
+    }): CancelablePromise<ApiResponse_CharacterImageRead_> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/api/v1/studio/cast/characters/{character_id}/images/{image_id}',
+            path: {
+                'character_id': characterId,
+                'image_id': imageId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * 删除角色图片
+     * @returns ApiResponse_NoneType_ Successful Response
+     * @throws ApiError
+     */
+    public static deleteCharacterImageApiV1StudioCastCharactersCharacterIdImagesImageIdDelete({
+        characterId,
+        imageId,
+    }: {
+        characterId: string,
+        imageId: number,
+    }): CancelablePromise<ApiResponse_NoneType_> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/studio/cast/characters/{character_id}/images/{image_id}',
+            path: {
+                'character_id': characterId,
+                'image_id': imageId,
             },
             errors: {
                 422: `Validation Error`,

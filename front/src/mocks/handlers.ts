@@ -508,20 +508,15 @@ export const handlers = [
     return HttpResponse.json(p, { status: 200 })
   }),
   http.post('/api/models/providers', async ({ request }) => {
-    const body = (await request.json()) as Partial<Provider> & { name: string; baseUrl: string }
+    const body = (await request.json()) as Partial<Provider> & { name: string; base_url: string }
     const id = `prov${Date.now()}`
-    const now = new Date().toISOString().slice(0, 10)
     const newP: Provider = {
       id,
       name: body.name ?? '未命名',
-      baseUrl: body.baseUrl ?? '',
-      apiKey: body.apiKey ?? '',
-      apiSecret: body.apiSecret ?? '',
+      base_url: body.base_url ?? '',
       description: body.description ?? '',
       status: body.status ?? 'active',
-      createdAt: now,
-      updatedAt: now,
-      createdBy: 'extreme',
+      created_by: 'extreme',
     }
     providersList = [...providersList, newP]
     return HttpResponse.json(newP, { status: 201 })
@@ -531,9 +526,8 @@ export const handlers = [
     const idx = providersList.findIndex((p) => p.id === id)
     if (idx === -1) return HttpResponse.json({ message: '供应商不存在' }, { status: 404 })
     const body = (await request.json()) as Partial<Provider>
-    const now = new Date().toISOString().slice(0, 10)
     providersList = providersList.map((p, i) =>
-      i === idx ? { ...p, ...body, id: p.id, updatedAt: now } : p
+      i === idx ? { ...p, ...body, id: p.id } : p
     )
     return HttpResponse.json(providersList[idx], { status: 200 })
   }),
@@ -556,24 +550,21 @@ export const handlers = [
     return HttpResponse.json(m, { status: 200 })
   }),
   http.post('/api/models/list', async ({ request }) => {
-    const body = (await request.json()) as Partial<Model> & { name: string; category: Model['category']; providerId: string }
+    const body = (await request.json()) as Partial<Model> & { name: string; category: Model['category']; provider_id: string }
     const id = `model${Date.now()}`
-    const now = new Date().toISOString().slice(0, 10)
     const newM: Model = {
       id,
       name: body.name ?? '未命名',
       category: body.category ?? 'text',
-      providerId: body.providerId ?? '',
+      provider_id: body.provider_id ?? '',
       params: body.params ?? {},
       description: body.description ?? '',
-      isDefault: body.isDefault ?? false,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: 'extreme',
+      is_default: body.is_default ?? false,
+      created_by: 'extreme',
     }
-    if (newM.isDefault) {
+    if (newM.is_default) {
       modelsList.forEach((m) => {
-        if (m.category === newM.category && m.id !== newM.id) (m as Model).isDefault = false
+        if (m.category === newM.category && m.id !== newM.id) (m as Model).is_default = false
       })
     }
     modelsList = [...modelsList, newM]
@@ -584,11 +575,10 @@ export const handlers = [
     const idx = modelsList.findIndex((m) => m.id === id)
     if (idx === -1) return HttpResponse.json({ message: '模型不存在' }, { status: 404 })
     const body = (await request.json()) as Partial<Model>
-    const now = new Date().toISOString().slice(0, 10)
-    const updated = { ...modelsList[idx], ...body, id: modelsList[idx].id, updatedAt: now }
-    if (body.isDefault === true) {
+    const updated = { ...modelsList[idx], ...body, id: modelsList[idx].id }
+    if (body.is_default === true) {
       modelsList = modelsList.map((m) =>
-        m.category === updated.category && m.id !== id ? { ...m, isDefault: false } : m
+        m.category === updated.category && m.id !== id ? { ...m, is_default: false } : m
       )
       modelsList[idx] = updated
     } else {

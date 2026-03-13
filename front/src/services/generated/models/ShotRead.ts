@@ -32,5 +32,9 @@ export type ShotRead = {
      * 剧本摘录
      */
     script_excerpt?: string;
+    /**
+     * 已生成视频关联的文件 ID（files.id，type=video）
+     */
+    generated_video_file_id?: (string | null);
 };
 

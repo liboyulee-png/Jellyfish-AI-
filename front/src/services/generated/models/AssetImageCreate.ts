@@ -7,7 +7,7 @@ import type { AssetViewAngle } from './AssetViewAngle';
 export type AssetImageCreate = {
     quality_level?: AssetQualityLevel;
     view_angle?: AssetViewAngle;
-    url: string;
+    file_id: string;
     width?: (number | null);
     height?: (number | null);
     format?: string;

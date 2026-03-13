@@ -10,5 +10,6 @@ export type ShotUpdate = {
     thumbnail?: (string | null);
     status?: (ShotStatus | null);
     script_excerpt?: (string | null);
+    generated_video_file_id?: (string | null);
 };
 

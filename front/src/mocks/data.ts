@@ -137,45 +137,43 @@ export interface Agent {
   updatedBy: string
 }
 
-/** 供应商状态 */
+/** 供应商状态（与 /api/v1/llm 实际接口一致） */
 export type ProviderStatus = 'active' | 'testing' | 'disabled'
 
+/** 供应商（snake_case 与真实 API ProviderRead 对齐） */
 export interface Provider {
   id: string
   name: string
-  baseUrl: string
-  apiKey: string
-  apiSecret: string
-  description: string
-  status: ProviderStatus
-  createdAt: string
-  updatedAt: string
-  createdBy: string
+  base_url: string
+  api_key?: string
+  api_secret?: string
+  description?: string
+  status?: ProviderStatus
+  created_by?: string
 }
 
 /** 模型类别：文本 / 图片 / 视频 */
 export type ModelCategoryKey = 'text' | 'image' | 'video'
 
+/** 模型（snake_case 与真实 API ModelRead 对齐） */
 export interface Model {
   id: string
   name: string
   category: ModelCategoryKey
-  providerId: string
-  params: Record<string, unknown>
-  description: string
-  isDefault: boolean
-  createdAt: string
-  updatedAt: string
-  createdBy: string
+  provider_id: string
+  params?: Record<string, unknown>
+  description?: string
+  is_default?: boolean
+  created_by?: string
 }
 
-/** 模型管理全局设置 */
+/** 模型管理全局设置（snake_case 与真实 API ModelSettingsRead 对齐） */
 export interface ModelSettings {
-  defaultTextModelId: string | null
-  defaultImageModelId: string | null
-  defaultVideoModelId: string | null
-  apiTimeout: number
-  logLevel: 'debug' | 'info' | 'warn' | 'error'
+  default_text_model_id: string | null
+  default_image_model_id: string | null
+  default_video_model_id: string | null
+  api_timeout: number
+  log_level: 'debug' | 'info' | 'warn' | 'error'
 }
 
 export const projects: Project[] = [
@@ -910,38 +908,26 @@ export const providers: Provider[] = [
   {
     id: 'prov1',
     name: 'OpenAI',
-    baseUrl: 'https://api.openai.com/v1',
-    apiKey: 'sk-***',
-    apiSecret: '********',
+    base_url: 'https://api.openai.com/v1',
     description: '支持 GPT 系列模型',
     status: 'active',
-    createdAt: '2026-02-01',
-    updatedAt: '2026-03-05',
-    createdBy: 'extreme',
+    created_by: 'extreme',
   },
   {
     id: 'prov2',
     name: 'Anthropic',
-    baseUrl: 'https://api.anthropic.com/v1',
-    apiKey: '********',
-    apiSecret: '********',
+    base_url: 'https://api.anthropic.com/v1',
     description: 'Claude 系列',
     status: 'active',
-    createdAt: '2026-02-10',
-    updatedAt: '2026-03-04',
-    createdBy: 'extreme',
+    created_by: 'extreme',
   },
   {
     id: 'prov3',
     name: '本地代理',
-    baseUrl: 'http://localhost:8080/v1',
-    apiKey: '********',
-    apiSecret: '********',
+    base_url: 'http://localhost:8080/v1',
     description: '本地转发测试',
     status: 'testing',
-    createdAt: '2026-03-01',
-    updatedAt: '2026-03-05',
-    createdBy: 'extreme',
+    created_by: 'extreme',
   },
 ]
 
@@ -950,69 +936,59 @@ export const llmModels: Model[] = [
     id: 'model1',
     name: 'GPT-4',
     category: 'text',
-    providerId: 'prov1',
+    provider_id: 'prov1',
     params: { max_tokens: 4096, temperature: 0.7 },
     description: '高性能文本生成模型',
-    isDefault: true,
-    createdAt: '2026-02-15',
-    updatedAt: '2026-03-05',
-    createdBy: 'extreme',
+    is_default: true,
+    created_by: 'extreme',
   },
   {
     id: 'model2',
     name: 'GPT-3.5-turbo',
     category: 'text',
-    providerId: 'prov1',
+    provider_id: 'prov1',
     params: { max_tokens: 2048 },
     description: '通用文本模型',
-    isDefault: false,
-    createdAt: '2026-02-20',
-    updatedAt: '2026-03-03',
-    createdBy: 'extreme',
+    is_default: false,
+    created_by: 'extreme',
   },
   {
     id: 'model3',
     name: 'Claude-3',
     category: 'text',
-    providerId: 'prov2',
+    provider_id: 'prov2',
     params: { max_tokens: 4096 },
     description: '长文本与推理',
-    isDefault: false,
-    createdAt: '2026-02-25',
-    updatedAt: '2026-03-04',
-    createdBy: 'extreme',
+    is_default: false,
+    created_by: 'extreme',
   },
   {
     id: 'model4',
     name: 'DALL-E 3',
     category: 'image',
-    providerId: 'prov1',
+    provider_id: 'prov1',
     params: { resolution: '1024x1024' },
     description: '图片生成',
-    isDefault: true,
-    createdAt: '2026-03-01',
-    updatedAt: '2026-03-05',
-    createdBy: 'extreme',
+    is_default: true,
+    created_by: 'extreme',
   },
   {
     id: 'model5',
     name: 'Sora',
     category: 'video',
-    providerId: 'prov1',
+    provider_id: 'prov1',
     params: {},
     description: '视频生成',
-    isDefault: true,
-    createdAt: '2026-03-02',
-    updatedAt: '2026-03-05',
-    createdBy: 'extreme',
+    is_default: true,
+    created_by: 'extreme',
   },
 ]
 
 export const defaultModelSettings: ModelSettings = {
-  defaultTextModelId: 'model1',
-  defaultImageModelId: 'model4',
-  defaultVideoModelId: 'model5',
-  apiTimeout: 30,
-  logLevel: 'info',
+  default_text_model_id: 'model1',
+  default_image_model_id: 'model4',
+  default_video_model_id: 'model5',
+  api_timeout: 30,
+  log_level: 'info',
 }
 
