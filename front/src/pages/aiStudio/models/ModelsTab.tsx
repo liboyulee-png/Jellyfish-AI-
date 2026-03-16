@@ -146,6 +146,7 @@ export default function ModelsTab() {
           typeof crypto !== 'undefined' && crypto.randomUUID
             ? crypto.randomUUID()
             : `model_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+        const isDefault = values.is_default === true
         await LlmService.createModelApiV1LlmModelsPost({
           requestBody: {
             id: modelId,
@@ -154,7 +155,7 @@ export default function ModelsTab() {
             provider_id: values.provider_id,
             description: values.description,
             params,
-            is_default: values.is_default,
+            is_default: isDefault,
           },
         })
         message.success('模型已添加')

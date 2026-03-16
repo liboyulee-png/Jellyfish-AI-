@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
@@ -223,6 +223,13 @@ async def create_model(
     if provider is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provider not found")
 
+    # 若设为该类别默认，先取消同类别其他模型的默认
+    if body.is_default:
+        await db.execute(
+            update(Model).where(Model.category == body.category).values(is_default=False)
+        )
+        await db.flush()
+
     model = Model(
         id=body.id,
         name=body.name,
@@ -276,6 +283,13 @@ async def update_model(
         provider = await db.get(Provider, new_provider_id)
         if provider is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provider not found")
+
+    # 若设为该类别默认，先取消同类别其他模型的默认
+    if update_data.get("is_default") is True:
+        await db.execute(
+            update(Model).where(Model.category == model.category).values(is_default=False)
+        )
+        await db.flush()
 
     for field, value in update_data.items():
         setattr(model, field, value)
