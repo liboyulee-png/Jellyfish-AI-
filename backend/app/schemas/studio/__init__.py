@@ -12,3 +12,11 @@ from app.schemas.studio.prompts import (
     PromptTemplateRead,
     PromptTemplateUpdate,
 )
+
+from app.schemas.studio.import_extraction_drafts import (
+    ImportCharacterDraftRead,
+    ImportCostumeDraftRead,
+    ImportDraftOccurrenceRead,
+    ImportPropDraftRead,
+    ImportSceneDraftRead,
+)

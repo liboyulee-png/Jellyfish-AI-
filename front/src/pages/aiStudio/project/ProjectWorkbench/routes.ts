@@ -10,6 +10,10 @@ export function getChapterPrepStepPath(projectId: string, chapterId: string, ste
   return `/projects/${projectId}/chapters/${chapterId}/prep/${step}`
 }
 
+export function getChapterPrepDraftsPath(projectId: string, chapterId: string) {
+  return `/projects/${projectId}/chapters/${chapterId}/prep-drafts`
+}
+
 export function getChapterStudioPath(projectId: string, chapterId: string) {
   return `/projects/${projectId}/chapters/${chapterId}/studio`
 }

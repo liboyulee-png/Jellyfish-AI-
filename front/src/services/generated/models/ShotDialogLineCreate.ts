@@ -10,5 +10,7 @@ export type ShotDialogLineCreate = {
     line_mode?: DialogueLineMode;
     speaker_character_id?: (string | null);
     target_character_id?: (string | null);
+    speaker_name?: (string | null);
+    target_name?: (string | null);
 };
 

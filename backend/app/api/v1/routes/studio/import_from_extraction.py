@@ -16,6 +16,12 @@ from app.dependencies import get_db
 from app.models.studio import (
     Actor,
     Chapter,
+    ImportCharacterDraft,
+    ImportCostumeDraft,
+    ImportDraftShotOccurrence,
+    ImportDraftType,
+    ImportPropDraft,
+    ImportSceneDraft,
     Character,
     CharacterPropLink,
     Costume,
@@ -166,6 +172,31 @@ async def _get_character_id_by_name(db: AsyncSession, *, project_id: str, name: 
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
+async def _get_draft_id_by_name(
+    db: AsyncSession,
+    model: Any,  # noqa: ANN401
+    *,
+    project_id: str,
+    name: str,
+) -> str | None:
+    stmt = select(model.id).where(model.project_id == project_id, model.name == name)
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def _get_asset_by_name(db: AsyncSession, model: Any, *, name: str) -> Any:  # noqa: ANN401
+    stmt = select(model).where(model.name == name)
+    return (await db.execute(stmt)).scalars().one_or_none()
+
+
+async def _delete_shot_draft_occurrences(db: AsyncSession, *, project_id: str, shot_id: str) -> None:
+    await db.execute(
+        delete(ImportDraftShotOccurrence).where(
+            ImportDraftShotOccurrence.project_id == project_id,
+            ImportDraftShotOccurrence.shot_id == shot_id,
+        )
+    )
+
+
 async def _delete_shot_links(db: AsyncSession, *, shot_id: str) -> None:
     await db.execute(delete(ProjectSceneLink).where(ProjectSceneLink.shot_id == shot_id))
     await db.execute(delete(ProjectPropLink).where(ProjectPropLink.shot_id == shot_id))
@@ -196,6 +227,9 @@ async def import_from_extraction(
 ) -> ApiResponse[ImportFromExtractionResponse]:
     await _ensure_project_and_chapter(db, body.project_id, body.chapter_id)
 
+    # 需求口径：仅写入草稿与 shot 分镜（Shot/ShotDetail/ShotDialogLine），不写入资产表与资产关联链接表
+    write_asset_tables = False
+
     # 默认不覆盖：预检冲突并提示重复
     if not body.force_overwrite:
         for s in body.shots:
@@ -203,14 +237,15 @@ async def import_from_extraction(
             if (await db.execute(stmt)).scalar_one_or_none() is not None:
                 raise HTTPException(status_code=400, detail=f"Shot index already exists in chapter: {s.index}")
 
-        for a in body.scenes:
-            await _ensure_unique_asset_name(db, Scene, name=a.name)
-        for a in body.props:
-            await _ensure_unique_asset_name(db, Prop, name=a.name)
-        for a in body.costumes:
-            await _ensure_unique_asset_name(db, Costume, name=a.name)
-        for c in body.characters:
-            await _ensure_unique_character_name(db, project_id=body.project_id, name=c.name)
+        if write_asset_tables:
+            for a in body.scenes:
+                await _ensure_unique_asset_name(db, Scene, name=a.name)
+            for a in body.props:
+                await _ensure_unique_asset_name(db, Prop, name=a.name)
+            for a in body.costumes:
+                await _ensure_unique_asset_name(db, Costume, name=a.name)
+            for c in body.characters:
+                await _ensure_unique_character_name(db, project_id=body.project_id, name=c.name)
 
     scene_by_name: dict[str, str] = {}
     prop_by_name: dict[str, str] = {}
@@ -236,141 +271,269 @@ async def import_from_extraction(
         "updated_costumes": 0,
         "updated_characters": 0,
         "updated_shots": 0,
+        "draft_scenes": 0,
+        "draft_props": 0,
+        "draft_costumes": 0,
+        "draft_characters": 0,
+        "updated_draft_scenes": 0,
+        "updated_draft_props": 0,
+        "updated_draft_costumes": 0,
+        "updated_draft_characters": 0,
+        "draft_shot_occurrences": 0,
     }
 
-    # --- Create / overwrite assets ---
+    # --- Upsert import drafts（用于“拍摄准备”页关联展示） ---
+    scene_draft_by_name: dict[str, str] = {}
+    prop_draft_by_name: dict[str, str] = {}
+    costume_draft_by_name: dict[str, str] = {}
+    character_draft_by_name: dict[str, str] = {}
+
     for a in body.scenes:
-        existing_id = await _get_asset_id_by_name(db, Scene, name=a.name)
-        if existing_id is not None and body.force_overwrite:
-            obj = await db.get(Scene, existing_id)
-            assert obj is not None
-            obj.description = a.description
-            obj.tags = a.tags
-            obj.prompt_template_id = a.prompt_template_id
-            obj.view_count = a.view_count
-            scene_by_name[a.name] = existing_id
-            created_counts["updated_scenes"] += 1
+        existing_draft_id = await _get_draft_id_by_name(db, ImportSceneDraft, project_id=body.project_id, name=a.name)
+        if existing_draft_id is not None:
+            scene_draft_by_name[a.name] = existing_draft_id
+            if body.force_overwrite:
+                obj = await db.get(ImportSceneDraft, existing_draft_id)
+                assert obj is not None
+                obj.description = a.description
+                obj.tags = a.tags
+                obj.raw_extra = {}
+                created_counts["updated_draft_scenes"] += 1
         else:
-            scene_id = _new_id("scene")
-            scene_by_name[a.name] = scene_id
+            draft_id = _new_id("scene_draft")
+            scene_draft_by_name[a.name] = draft_id
             db.add(
-                Scene(
-                    id=scene_id,
+                ImportSceneDraft(
+                    id=draft_id,
+                    project_id=body.project_id,
                     name=a.name,
                     description=a.description,
                     tags=a.tags,
-                    prompt_template_id=a.prompt_template_id,
-                    view_count=a.view_count,
+                    raw_extra={},
                 )
             )
-            created_counts["scenes"] += 1
+            created_counts["draft_scenes"] += 1
 
     for a in body.props:
-        existing_id = await _get_asset_id_by_name(db, Prop, name=a.name)
-        if existing_id is not None and body.force_overwrite:
-            obj = await db.get(Prop, existing_id)
-            assert obj is not None
-            obj.description = a.description
-            obj.tags = a.tags
-            obj.prompt_template_id = a.prompt_template_id
-            obj.view_count = a.view_count
-            prop_by_name[a.name] = existing_id
-            created_counts["updated_props"] += 1
+        existing_draft_id = await _get_draft_id_by_name(db, ImportPropDraft, project_id=body.project_id, name=a.name)
+        if existing_draft_id is not None:
+            prop_draft_by_name[a.name] = existing_draft_id
+            if body.force_overwrite:
+                obj = await db.get(ImportPropDraft, existing_draft_id)
+                assert obj is not None
+                obj.description = a.description
+                obj.tags = a.tags
+                obj.raw_extra = {}
+                created_counts["updated_draft_props"] += 1
         else:
-            prop_id = _new_id("prop")
-            prop_by_name[a.name] = prop_id
+            draft_id = _new_id("prop_draft")
+            prop_draft_by_name[a.name] = draft_id
             db.add(
-                Prop(
-                    id=prop_id,
+                ImportPropDraft(
+                    id=draft_id,
+                    project_id=body.project_id,
                     name=a.name,
                     description=a.description,
                     tags=a.tags,
-                    prompt_template_id=a.prompt_template_id,
-                    view_count=a.view_count,
+                    raw_extra={},
                 )
             )
-            created_counts["props"] += 1
+            created_counts["draft_props"] += 1
 
     for a in body.costumes:
-        existing_id = await _get_asset_id_by_name(db, Costume, name=a.name)
-        if existing_id is not None and body.force_overwrite:
-            obj = await db.get(Costume, existing_id)
-            assert obj is not None
-            obj.description = a.description
-            obj.tags = a.tags
-            obj.prompt_template_id = a.prompt_template_id
-            obj.view_count = a.view_count
-            costume_by_name[a.name] = existing_id
-            created_counts["updated_costumes"] += 1
+        existing_draft_id = await _get_draft_id_by_name(db, ImportCostumeDraft, project_id=body.project_id, name=a.name)
+        if existing_draft_id is not None:
+            costume_draft_by_name[a.name] = existing_draft_id
+            if body.force_overwrite:
+                obj = await db.get(ImportCostumeDraft, existing_draft_id)
+                assert obj is not None
+                obj.description = a.description
+                obj.tags = a.tags
+                obj.raw_extra = {}
+                created_counts["updated_draft_costumes"] += 1
         else:
-            costume_id = _new_id("costume")
-            costume_by_name[a.name] = costume_id
+            draft_id = _new_id("costume_draft")
+            costume_draft_by_name[a.name] = draft_id
             db.add(
-                Costume(
-                    id=costume_id,
+                ImportCostumeDraft(
+                    id=draft_id,
+                    project_id=body.project_id,
                     name=a.name,
                     description=a.description,
                     tags=a.tags,
-                    prompt_template_id=a.prompt_template_id,
-                    view_count=a.view_count,
+                    raw_extra={},
                 )
             )
-            created_counts["costumes"] += 1
+            created_counts["draft_costumes"] += 1
 
-    await db.flush()
-
-    # --- Create / overwrite characters ---
     for c in body.characters:
-        costume_id = costume_by_name.get(c.costume_name) if c.costume_name else None
-        existing_id = await _get_character_id_by_name(db, project_id=body.project_id, name=c.name)
-        if existing_id is not None and body.force_overwrite:
-            obj = await db.get(Character, existing_id)
-            assert obj is not None
-            obj.description = c.description
-            obj.actor_id = None
-            obj.costume_id = costume_id
-            character_by_name[c.name] = existing_id
-            created_counts["updated_characters"] += 1
-            await _delete_character_prop_links(db, character_id=existing_id)
+        existing_draft_id = await _get_draft_id_by_name(
+            db,
+            ImportCharacterDraft,
+            project_id=body.project_id,
+            name=c.name,
+        )
+        if existing_draft_id is not None:
+            character_draft_by_name[c.name] = existing_draft_id
+            if body.force_overwrite:
+                obj = await db.get(ImportCharacterDraft, existing_draft_id)
+                assert obj is not None
+                obj.description = c.description
+                obj.tags = c.tags
+                obj.raw_extra = {}
+                created_counts["updated_draft_characters"] += 1
         else:
-            char_id = _new_id("char")
-            character_by_name[c.name] = char_id
+            draft_id = _new_id("char_draft")
+            character_draft_by_name[c.name] = draft_id
             db.add(
-                Character(
-                    id=char_id,
+                ImportCharacterDraft(
+                    id=draft_id,
                     project_id=body.project_id,
                     name=c.name,
                     description=c.description,
-                    actor_id=None,
-                    costume_id=costume_id,
+                    tags=c.tags,
+                    raw_extra={},
                 )
             )
-            created_counts["characters"] += 1
+            created_counts["draft_characters"] += 1
 
     await db.flush()
 
-    # --- CharacterPropLink ---
-    for c in body.characters:
-        if not c.prop_names:
-            continue
-        char_id = character_by_name[c.name]
-        for idx, prop_name in enumerate(c.prop_names):
-            prop_id = prop_by_name.get(prop_name)
-            if prop_id is None:
-                raise HTTPException(status_code=400, detail=f"Unknown prop_name referenced by character: {prop_name}")
-            db.add(
-                CharacterPropLink(
-                    character_id=char_id,
-                    prop_id=prop_id,
-                    index=idx,
-                    note="",
+    # --- Create / overwrite assets ---
+    if write_asset_tables:
+        for a in body.scenes:
+            existing_id = await _get_asset_id_by_name(db, Scene, name=a.name)
+            if existing_id is not None and body.force_overwrite:
+                obj = await db.get(Scene, existing_id)
+                assert obj is not None
+                obj.description = a.description
+                obj.tags = a.tags
+                obj.prompt_template_id = a.prompt_template_id
+                obj.view_count = a.view_count
+                scene_by_name[a.name] = existing_id
+                created_counts["updated_scenes"] += 1
+            else:
+                scene_id = _new_id("scene")
+                scene_by_name[a.name] = scene_id
+                db.add(
+                    Scene(
+                        id=scene_id,
+                        name=a.name,
+                        description=a.description,
+                        tags=a.tags,
+                        prompt_template_id=a.prompt_template_id,
+                        view_count=a.view_count,
+                    )
                 )
-            )
-            created_counts["character_prop_links"] += 1
+                created_counts["scenes"] += 1
 
-    await db.flush()
+        for a in body.props:
+            existing_id = await _get_asset_id_by_name(db, Prop, name=a.name)
+            if existing_id is not None and body.force_overwrite:
+                obj = await db.get(Prop, existing_id)
+                assert obj is not None
+                obj.description = a.description
+                obj.tags = a.tags
+                obj.prompt_template_id = a.prompt_template_id
+                obj.view_count = a.view_count
+                prop_by_name[a.name] = existing_id
+                created_counts["updated_props"] += 1
+            else:
+                prop_id = _new_id("prop")
+                prop_by_name[a.name] = prop_id
+                db.add(
+                    Prop(
+                        id=prop_id,
+                        name=a.name,
+                        description=a.description,
+                        tags=a.tags,
+                        prompt_template_id=a.prompt_template_id,
+                        view_count=a.view_count,
+                    )
+                )
+                created_counts["props"] += 1
+
+        for a in body.costumes:
+            existing_id = await _get_asset_id_by_name(db, Costume, name=a.name)
+            if existing_id is not None and body.force_overwrite:
+                obj = await db.get(Costume, existing_id)
+                assert obj is not None
+                obj.description = a.description
+                obj.tags = a.tags
+                obj.prompt_template_id = a.prompt_template_id
+                obj.view_count = a.view_count
+                costume_by_name[a.name] = existing_id
+                created_counts["updated_costumes"] += 1
+            else:
+                costume_id = _new_id("costume")
+                costume_by_name[a.name] = costume_id
+                db.add(
+                    Costume(
+                        id=costume_id,
+                        name=a.name,
+                        description=a.description,
+                        tags=a.tags,
+                        prompt_template_id=a.prompt_template_id,
+                        view_count=a.view_count,
+                    )
+                )
+                created_counts["costumes"] += 1
+
+        await db.flush()
+
+        # --- Create / overwrite characters ---
+        for c in body.characters:
+            costume_id = costume_by_name.get(c.costume_name) if c.costume_name else None
+            existing_id = await _get_character_id_by_name(db, project_id=body.project_id, name=c.name)
+            if existing_id is not None and body.force_overwrite:
+                obj = await db.get(Character, existing_id)
+                assert obj is not None
+                obj.description = c.description
+                obj.actor_id = None
+                obj.costume_id = costume_id
+                character_by_name[c.name] = existing_id
+                created_counts["updated_characters"] += 1
+                await _delete_character_prop_links(db, character_id=existing_id)
+            else:
+                char_id = _new_id("char")
+                character_by_name[c.name] = char_id
+                db.add(
+                    Character(
+                        id=char_id,
+                        project_id=body.project_id,
+                        name=c.name,
+                        description=c.description,
+                        actor_id=None,
+                        costume_id=costume_id,
+                    )
+                )
+                created_counts["characters"] += 1
+
+        await db.flush()
+
+        # --- CharacterPropLink ---
+        for c in body.characters:
+            if not c.prop_names:
+                continue
+            char_id = character_by_name[c.name]
+            for idx, prop_name in enumerate(c.prop_names):
+                prop_id = prop_by_name.get(prop_name)
+                if prop_id is None:
+                    raise HTTPException(status_code=400, detail=f"Unknown prop_name referenced by character: {prop_name}")
+                db.add(
+                    CharacterPropLink(
+                        character_id=char_id,
+                        prop_id=prop_id,
+                        index=idx,
+                        note="",
+                    )
+                )
+                created_counts["character_prop_links"] += 1
+
+        await db.flush()
 
     # --- Create / overwrite shots + details ---
+    scene_id_cache: dict[str, str | None] = {}
     for s in body.shots:
         existing_shot_id = (await db.execute(
             select(Shot.id).where(Shot.chapter_id == body.chapter_id, Shot.index == s.index)
@@ -400,13 +563,14 @@ async def import_from_extraction(
             )
             created_counts["shots"] += 1
 
-        scene_ids = await _resolve_scene_ids(
-            db,
-            scene_name_raw=s.scene_name,
-            scene_by_name=scene_by_name,
-            force_overwrite=body.force_overwrite,
-        )
-        scene_id = scene_ids[0] if scene_ids else None
+        # 不创建 Scene 资产，只尝试按 name 读取已存在的 Scene
+        scene_id: str | None = None
+        for scene_token in _split_scene_names(s.scene_name):
+            if scene_token not in scene_id_cache:
+                scene_id_cache[scene_token] = await _get_asset_id_by_name(db, Scene, name=scene_token)
+            if scene_id_cache[scene_token]:
+                scene_id = scene_id_cache[scene_token]
+                break
         detail = await db.get(ShotDetail, shot_id)
         if detail is None:
             db.add(
@@ -436,83 +600,228 @@ async def import_from_extraction(
 
     await db.flush()
 
-    # --- Create shot links + dialog lines ---
+    # --- Create shot dialog lines（不创建 project_link/shot character links） ---
+    character_id_cache: dict[str, str | None] = {}
     for s in body.shots:
         shot_id = shot_by_index[s.index]
         if body.force_overwrite:
             await _delete_shot_links(db, shot_id=shot_id)
+            await _delete_shot_draft_occurrences(db, project_id=body.project_id, shot_id=shot_id)
 
-        if s.scene_name:
-            scene_ids = await _resolve_scene_ids(
-                db,
-                scene_name_raw=s.scene_name,
-                scene_by_name=scene_by_name,
-                force_overwrite=body.force_overwrite,
-            )
-            if not scene_ids:
-                raise HTTPException(status_code=400, detail=f"Unknown scene_name referenced by shot: {s.scene_name}")
-            for scene_id in scene_ids:
-                await upsert_project_link(
-                    db,
-                    model=ProjectSceneLink,
-                    asset_field="scene_id",
-                    asset_id=scene_id,
+        # --- Upsert draft occurrences（用于“拍摄准备”页按镜头筛选） ---
+        seen_scene: set[str] = set()
+        for scene_token in _split_scene_names(s.scene_name):
+            if scene_token in seen_scene:
+                continue
+            seen_scene.add(scene_token)
+            draft_id = scene_draft_by_name.get(scene_token)
+            if draft_id is None:
+                # 仅草稿写入时：缺失的草稿不依赖资产表回查，直接创建最小 draft
+                if write_asset_tables and body.force_overwrite:
+                    scene_obj = await _get_asset_by_name(db, Scene, name=scene_token)
+                    if scene_obj is not None:
+                        draft_id = _new_id("scene_draft")
+                        scene_draft_by_name[scene_token] = draft_id
+                        db.add(
+                            ImportSceneDraft(
+                                id=draft_id,
+                                project_id=body.project_id,
+                                name=scene_token,
+                                description=scene_obj.description,
+                                tags=scene_obj.tags,
+                                raw_extra={},
+                            )
+                        )
+                        created_counts["draft_scenes"] += 1
+                if draft_id is None:
+                    draft_id = _new_id("scene_draft")
+                    scene_draft_by_name[scene_token] = draft_id
+                    db.add(
+                        ImportSceneDraft(
+                            id=draft_id,
+                            project_id=body.project_id,
+                            name=scene_token,
+                            description="",
+                            tags=[],
+                            raw_extra={},
+                        )
+                    )
+                    created_counts["draft_scenes"] += 1
+            db.add(
+                ImportDraftShotOccurrence(
+                    id=_new_id("occ"),
                     project_id=body.project_id,
                     chapter_id=body.chapter_id,
                     shot_id=shot_id,
+                    draft_type=ImportDraftType.scene,
+                    draft_id=draft_id,
                 )
-                created_counts["shot_scene_links"] += 1
-
-        for idx, prop_name in enumerate(s.prop_names):
-            prop_id = prop_by_name.get(prop_name)
-            if prop_id is None and body.force_overwrite:
-                prop_id = await _get_asset_id_by_name(db, Prop, name=prop_name)
-            if prop_id is None:
-                raise HTTPException(status_code=400, detail=f"Unknown prop_name referenced by shot: {prop_name}")
-            await upsert_project_link(
-                db,
-                model=ProjectPropLink,
-                asset_field="prop_id",
-                asset_id=prop_id,
-                project_id=body.project_id,
-                chapter_id=body.chapter_id,
-                shot_id=shot_id,
             )
-            created_counts["shot_prop_links"] += 1
+            created_counts["draft_shot_occurrences"] += 1
 
-        for idx, costume_name in enumerate(s.costume_names):
-            costume_id = costume_by_name.get(costume_name)
-            if costume_id is None and body.force_overwrite:
-                costume_id = await _get_asset_id_by_name(db, Costume, name=costume_name)
-            if costume_id is None:
-                raise HTTPException(status_code=400, detail=f"Unknown costume_name referenced by shot: {costume_name}")
-            await upsert_project_link(
-                db,
-                model=ProjectCostumeLink,
-                asset_field="costume_id",
-                asset_id=costume_id,
-                project_id=body.project_id,
-                chapter_id=body.chapter_id,
-                shot_id=shot_id,
+        seen_char: set[str] = set()
+        for char_name in s.character_names:
+            if char_name in seen_char:
+                continue
+            seen_char.add(char_name)
+            draft_id = character_draft_by_name.get(char_name)
+            if draft_id is None:
+                if write_asset_tables and body.force_overwrite:
+                    char_stmt = select(Character).where(Character.project_id == body.project_id, Character.name == char_name)
+                    char_obj = (await db.execute(char_stmt)).scalars().one_or_none()
+                    if char_obj is not None:
+                        draft_id = _new_id("char_draft")
+                        character_draft_by_name[char_name] = draft_id
+                        db.add(
+                            ImportCharacterDraft(
+                                id=draft_id,
+                                project_id=body.project_id,
+                                name=char_name,
+                                description=char_obj.description,
+                                tags=[],
+                                raw_extra={},
+                            )
+                        )
+                        created_counts["draft_characters"] += 1
+                if draft_id is None:
+                    draft_id = _new_id("char_draft")
+                    character_draft_by_name[char_name] = draft_id
+                    db.add(
+                        ImportCharacterDraft(
+                            id=draft_id,
+                            project_id=body.project_id,
+                            name=char_name,
+                            description="",
+                            tags=[],
+                            raw_extra={},
+                        )
+                    )
+                    created_counts["draft_characters"] += 1
+            db.add(
+                ImportDraftShotOccurrence(
+                    id=_new_id("occ"),
+                    project_id=body.project_id,
+                    chapter_id=body.chapter_id,
+                    shot_id=shot_id,
+                    draft_type=ImportDraftType.character,
+                    draft_id=draft_id,
+                )
             )
-            created_counts["shot_costume_links"] += 1
+            created_counts["draft_shot_occurrences"] += 1
 
-        for idx, char_name in enumerate(s.character_names):
-            char_id = character_by_name.get(char_name)
-            if char_id is None and body.force_overwrite:
-                char_id = await _get_character_id_by_name(db, project_id=body.project_id, name=char_name)
-            if char_id is None:
-                raise HTTPException(status_code=400, detail=f"Unknown character_name referenced by shot: {char_name}")
-            db.add(ShotCharacterLink(shot_id=shot_id, character_id=char_id, index=idx, note=""))
-            created_counts["shot_character_links"] += 1
+        seen_prop: set[str] = set()
+        for prop_name in s.prop_names:
+            if prop_name in seen_prop:
+                continue
+            seen_prop.add(prop_name)
+            draft_id = prop_draft_by_name.get(prop_name)
+            if draft_id is None:
+                if write_asset_tables and body.force_overwrite:
+                    prop_obj = await _get_asset_by_name(db, Prop, name=prop_name)
+                    if prop_obj is not None:
+                        draft_id = _new_id("prop_draft")
+                        prop_draft_by_name[prop_name] = draft_id
+                        db.add(
+                            ImportPropDraft(
+                                id=draft_id,
+                                project_id=body.project_id,
+                                name=prop_name,
+                                description=prop_obj.description,
+                                tags=prop_obj.tags,
+                                raw_extra={},
+                            )
+                        )
+                        created_counts["draft_props"] += 1
+                if draft_id is None:
+                    draft_id = _new_id("prop_draft")
+                    prop_draft_by_name[prop_name] = draft_id
+                    db.add(
+                        ImportPropDraft(
+                            id=draft_id,
+                            project_id=body.project_id,
+                            name=prop_name,
+                            description="",
+                            tags=[],
+                            raw_extra={},
+                        )
+                    )
+                    created_counts["draft_props"] += 1
+            db.add(
+                ImportDraftShotOccurrence(
+                    id=_new_id("occ"),
+                    project_id=body.project_id,
+                    chapter_id=body.chapter_id,
+                    shot_id=shot_id,
+                    draft_type=ImportDraftType.prop,
+                    draft_id=draft_id,
+                )
+            )
+            created_counts["draft_shot_occurrences"] += 1
+
+        seen_costume: set[str] = set()
+        for costume_name in s.costume_names:
+            if costume_name in seen_costume:
+                continue
+            seen_costume.add(costume_name)
+            draft_id = costume_draft_by_name.get(costume_name)
+            if draft_id is None:
+                if write_asset_tables and body.force_overwrite:
+                    costume_obj = await _get_asset_by_name(db, Costume, name=costume_name)
+                    if costume_obj is not None:
+                        draft_id = _new_id("costume_draft")
+                        costume_draft_by_name[costume_name] = draft_id
+                        db.add(
+                            ImportCostumeDraft(
+                                id=draft_id,
+                                project_id=body.project_id,
+                                name=costume_name,
+                                description=costume_obj.description,
+                                tags=costume_obj.tags,
+                                raw_extra={},
+                            )
+                        )
+                        created_counts["draft_costumes"] += 1
+                if draft_id is None:
+                    draft_id = _new_id("costume_draft")
+                    costume_draft_by_name[costume_name] = draft_id
+                    db.add(
+                        ImportCostumeDraft(
+                            id=draft_id,
+                            project_id=body.project_id,
+                            name=costume_name,
+                            description="",
+                            tags=[],
+                            raw_extra={},
+                        )
+                    )
+                    created_counts["draft_costumes"] += 1
+            db.add(
+                ImportDraftShotOccurrence(
+                    id=_new_id("occ"),
+                    project_id=body.project_id,
+                    chapter_id=body.chapter_id,
+                    shot_id=shot_id,
+                    draft_type=ImportDraftType.costume,
+                    draft_id=draft_id,
+                )
+            )
+            created_counts["draft_shot_occurrences"] += 1
 
         for line in s.dialogue_lines:
-            speaker_id = character_by_name.get(line.speaker_name) if line.speaker_name else None
-            target_id = character_by_name.get(line.target_name) if line.target_name else None
-            if body.force_overwrite and line.speaker_name and speaker_id is None:
-                speaker_id = await _get_character_id_by_name(db, project_id=body.project_id, name=line.speaker_name)
-            if body.force_overwrite and line.target_name and target_id is None:
-                target_id = await _get_character_id_by_name(db, project_id=body.project_id, name=line.target_name)
+            speaker_id: str | None = None
+            target_id: str | None = None
+            if line.speaker_name:
+                if line.speaker_name not in character_id_cache:
+                    character_id_cache[line.speaker_name] = await _get_character_id_by_name(
+                        db, project_id=body.project_id, name=line.speaker_name
+                    )
+                speaker_id = character_id_cache[line.speaker_name]
+            if line.target_name:
+                if line.target_name not in character_id_cache:
+                    character_id_cache[line.target_name] = await _get_character_id_by_name(
+                        db, project_id=body.project_id, name=line.target_name
+                    )
+                target_id = character_id_cache[line.target_name]
             db.add(
                 ShotDialogLine(
                     shot_detail_id=shot_id,
@@ -521,6 +830,8 @@ async def import_from_extraction(
                     line_mode=DialogueLineMode(line.line_mode),
                     speaker_character_id=speaker_id,
                     target_character_id=target_id,
+                    speaker_name=line.speaker_name,
+                    target_name=line.target_name,
                 )
             )
             created_counts["shot_dialog_lines"] += 1
@@ -534,6 +845,10 @@ async def import_from_extraction(
             "props": prop_by_name,
             "costumes": costume_by_name,
             "characters": character_by_name,
+            "scene_drafts": scene_draft_by_name,
+            "prop_drafts": prop_draft_by_name,
+            "costume_drafts": costume_draft_by_name,
+            "character_drafts": character_draft_by_name,
             "shots": {str(k): v for k, v in shot_by_index.items()},
         },
     )

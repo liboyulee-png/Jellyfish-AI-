@@ -23,6 +23,7 @@ import ConsistencyStep from './pages/aiStudio/chapter/prep/steps/ConsistencyStep
 import DivideStep from './pages/aiStudio/chapter/prep/steps/DivideStep'
 import ExtractProjectStep from './pages/aiStudio/chapter/prep/steps/ExtractProjectStep'
 import { ChapterShotsPage } from './pages/aiStudio/shots/ChapterShotsPage'
+import ChapterPrepDraftsPage from './pages/aiStudio/chapter/prep_drafts/ChapterPrepDraftsPage'
 import './App.css'
 
 const App: React.FC = () => {
@@ -42,6 +43,7 @@ const App: React.FC = () => {
           </Route>
           <Route path="projects/:projectId/chapters/:chapterId/studio" element={<ChapterStudio />} />
           <Route path="projects/:projectId/chapters/:chapterId/shots" element={<ChapterShotsPage />} />
+          <Route path="projects/:projectId/chapters/:chapterId/prep-drafts" element={<ChapterPrepDraftsPage />} />
           <Route path="projects/:projectId/editor" element={<VideoEditor />} />
           <Route path="assets" element={<AssetManager />} />
           <Route path="assets/actors/:actorImageId/edit" element={<ActorAssetEditPage />} />

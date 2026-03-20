@@ -9,5 +9,7 @@ export type ShotDialogLineUpdate = {
     line_mode?: (DialogueLineMode | null);
     speaker_character_id?: (string | null);
     target_character_id?: (string | null);
+    speaker_name?: (string | null);
+    target_name?: (string | null);
 };
 

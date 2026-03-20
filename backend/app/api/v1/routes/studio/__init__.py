@@ -12,6 +12,8 @@ from app.api.v1.routes.studio import (
     prompts,
     shots,
     timeline,
+    prep_drafts,
+    shot_character_links,
 )
 
 router = APIRouter()
@@ -31,4 +33,6 @@ router.include_router(files.router, prefix="/files", tags=["studio/files"])
 router.include_router(timeline.router, prefix="/timeline", tags=["studio/timeline"])
 router.include_router(image_tasks.router, prefix="/image-tasks", tags=["studio/image-tasks"])
 router.include_router(import_from_extraction.router, tags=["studio/import"])
+router.include_router(prep_drafts.router, tags=["studio/prep-drafts"])
+router.include_router(shot_character_links.router, prefix="/shot-character-links", tags=["studio/shot-character-links"])
 

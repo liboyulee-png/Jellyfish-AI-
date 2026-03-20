@@ -33,6 +33,7 @@ export type { ApiResponse_PaginatedData_ShotDetailRead__ } from './models/ApiRes
 export type { ApiResponse_PaginatedData_ShotDialogLineRead__ } from './models/ApiResponse_PaginatedData_ShotDialogLineRead__';
 export type { ApiResponse_PaginatedData_ShotFrameImageRead__ } from './models/ApiResponse_PaginatedData_ShotFrameImageRead__';
 export type { ApiResponse_PaginatedData_ShotRead__ } from './models/ApiResponse_PaginatedData_ShotRead__';
+export type { ApiResponse_PrepDraftShotRead_ } from './models/ApiResponse_PrepDraftShotRead_';
 export type { ApiResponse_ProjectActorLinkRead_ } from './models/ApiResponse_ProjectActorLinkRead_';
 export type { ApiResponse_ProjectCostumeLinkRead_ } from './models/ApiResponse_ProjectCostumeLinkRead_';
 export type { ApiResponse_ProjectPropLinkRead_ } from './models/ApiResponse_ProjectPropLinkRead_';
@@ -43,6 +44,7 @@ export type { ApiResponse_ProviderRead_ } from './models/ApiResponse_ProviderRea
 export type { ApiResponse_ScriptConsistencyCheckResult_ } from './models/ApiResponse_ScriptConsistencyCheckResult_';
 export type { ApiResponse_ScriptDivisionResult_ } from './models/ApiResponse_ScriptDivisionResult_';
 export type { ApiResponse_ScriptOptimizationResult_ } from './models/ApiResponse_ScriptOptimizationResult_';
+export type { ApiResponse_ShotCharacterLinkRead_ } from './models/ApiResponse_ShotCharacterLinkRead_';
 export type { ApiResponse_ShotDetailRead_ } from './models/ApiResponse_ShotDetailRead_';
 export type { ApiResponse_ShotDialogLineRead_ } from './models/ApiResponse_ShotDialogLineRead_';
 export type { ApiResponse_ShotElementExtractionResult_ } from './models/ApiResponse_ShotElementExtractionResult_';
@@ -87,8 +89,14 @@ export type { GenerationTaskLinkUpdate } from './models/GenerationTaskLinkUpdate
 export type { HTTPValidationError } from './models/HTTPValidationError';
 export type { ImageGenerationTaskRequest } from './models/ImageGenerationTaskRequest';
 export type { ImageInputRef } from './models/ImageInputRef';
+export type { ImportCharacterDraftRead } from './models/ImportCharacterDraftRead';
+export type { ImportCostumeDraftRead } from './models/ImportCostumeDraftRead';
+export type { ImportDraftOccurrenceRead } from './models/ImportDraftOccurrenceRead';
+export type { ImportDraftType } from './models/ImportDraftType';
 export type { ImportFromExtractionRequest } from './models/ImportFromExtractionRequest';
 export type { ImportFromExtractionResponse } from './models/ImportFromExtractionResponse';
+export type { ImportPropDraftRead } from './models/ImportPropDraftRead';
+export type { ImportSceneDraftRead } from './models/ImportSceneDraftRead';
 export type { Location } from './models/Location';
 export type { LogLevel } from './models/LogLevel';
 export type { ModelCategoryKey } from './models/ModelCategoryKey';
@@ -111,6 +119,7 @@ export type { PaginatedData_ShotDialogLineRead_ } from './models/PaginatedData_S
 export type { PaginatedData_ShotFrameImageRead_ } from './models/PaginatedData_ShotFrameImageRead_';
 export type { PaginatedData_ShotRead_ } from './models/PaginatedData_ShotRead_';
 export type { Pagination } from './models/Pagination';
+export type { PrepDraftShotRead } from './models/PrepDraftShotRead';
 export type { ProjectActorLinkRead } from './models/ProjectActorLinkRead';
 export type { ProjectAssetLinkCreate } from './models/ProjectAssetLinkCreate';
 export type { ProjectCinematicBreakdown } from './models/ProjectCinematicBreakdown';
@@ -143,6 +152,8 @@ export type { ScriptOptimizationResult } from './models/ScriptOptimizationResult
 export type { ScriptOptimizeRequest } from './models/ScriptOptimizeRequest';
 export type { Shot } from './models/Shot';
 export type { ShotCharacterInfo } from './models/ShotCharacterInfo';
+export type { ShotCharacterLinkCreate } from './models/ShotCharacterLinkCreate';
+export type { ShotCharacterLinkRead } from './models/ShotCharacterLinkRead';
 export type { ShotCreate } from './models/ShotCreate';
 export type { ShotDetailCreate } from './models/ShotDetailCreate';
 export type { ShotDetailRead } from './models/ShotDetailRead';
@@ -199,8 +210,10 @@ export { StudioEntitiesService } from './services/StudioEntitiesService';
 export { StudioFilesService } from './services/StudioFilesService';
 export { StudioImageTasksService } from './services/StudioImageTasksService';
 export { StudioImportService } from './services/StudioImportService';
+export { StudioPrepDraftsService } from './services/StudioPrepDraftsService';
 export { StudioProjectsService } from './services/StudioProjectsService';
 export { StudioPromptsService } from './services/StudioPromptsService';
+export { StudioShotCharacterLinksService } from './services/StudioShotCharacterLinksService';
 export { StudioShotDetailsService } from './services/StudioShotDetailsService';
 export { StudioShotDialogLinesService } from './services/StudioShotDialogLinesService';
 export { StudioShotFrameImagesService } from './services/StudioShotFrameImagesService';

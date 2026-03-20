@@ -109,6 +109,8 @@ class ShotDialogLineBase(BaseModel):
     line_mode: DialogueLineMode = Field(DialogueLineMode.dialogue, description="对白模式")
     speaker_character_id: str | None = Field(None, description="说话角色 ID")
     target_character_id: str | None = Field(None, description="听者角色 ID")
+    speaker_name: str | None = Field(None, description="说话角色名称（用于回填关联；可空）")
+    target_name: str | None = Field(None, description="听者角色名称（用于回填关联；可空）")
 
 
 class ShotDialogLineCreate(BaseModel):
@@ -118,6 +120,8 @@ class ShotDialogLineCreate(BaseModel):
     line_mode: DialogueLineMode = DialogueLineMode.dialogue
     speaker_character_id: str | None = None
     target_character_id: str | None = None
+    speaker_name: str | None = None
+    target_name: str | None = None
 
 
 class ShotDialogLineUpdate(BaseModel):
@@ -126,6 +130,8 @@ class ShotDialogLineUpdate(BaseModel):
     line_mode: DialogueLineMode | None = None
     speaker_character_id: str | None = None
     target_character_id: str | None = None
+    speaker_name: str | None = None
+    target_name: str | None = None
 
 
 class ShotDialogLineRead(ShotDialogLineBase):

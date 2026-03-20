@@ -5,7 +5,7 @@ import { PlusOutlined, VideoCameraOutlined } from '@ant-design/icons'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { StudioChaptersService } from '../../../../../services/generated'
 import { chapterStatusMap } from '../constants'
-import { getChapterPrepPath, getChapterShotsPath, getChapterStudioPath } from '../routes'
+import { getChapterPrepDraftsPath, getChapterPrepPath, getChapterShotsPath, getChapterStudioPath } from '../routes'
 import { useChapters, newId, type Chapter } from '../hooks/useProjectData'
 import { ChapterRawTextEditorModal } from '../../../chapter/components/ChapterRawTextEditorModal'
 
@@ -131,6 +131,13 @@ export function ChaptersTab() {
             onClick={() => goPrep(record.id, record.storyboardCount)}
           >
             信息提取
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => projectId && navigate(getChapterPrepDraftsPath(projectId, record.id))}
+          >
+            拍摄准备
           </Button>
           <Button
             type="link"

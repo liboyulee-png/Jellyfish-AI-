@@ -32,5 +32,13 @@ export type ShotDialogLineRead = {
      * 听者角色 ID
      */
     target_character_id?: (string | null);
+    /**
+     * 说话角色名称（用于回填关联；可空）
+     */
+    speaker_name?: (string | null);
+    /**
+     * 听者角色名称（用于回填关联；可空）
+     */
+    target_name?: (string | null);
 };
 
