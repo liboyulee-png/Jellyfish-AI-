@@ -298,9 +298,9 @@ def asset_prompt_category(
 ) -> PromptCategory:
     mapping = {
         "actor_image": (PromptCategory.actor_image_front, PromptCategory.actor_image_other),
-        "prop_image": (PromptCategory.prop_front, PromptCategory.prop_other),
-        "scene_image": (PromptCategory.scene_front, PromptCategory.scene_other),
-        "costume_image": (PromptCategory.costume_front, PromptCategory.costume_other),
+        "prop_image": (PromptCategory.prop_image_front, PromptCategory.prop_image_other),
+        "scene_image": (PromptCategory.scene_image_front, PromptCategory.scene_image_other),
+        "costume_image": (PromptCategory.costume_image_front, PromptCategory.costume_image_other),
     }
     front_category, other_category = mapping[relation_type]
     return front_category if is_front_view else other_category
@@ -309,8 +309,8 @@ def asset_prompt_category(
 def shot_frame_prompt_category(frame_type: ShotFrameType | str) -> PromptCategory:
     value = frame_type.value if isinstance(frame_type, ShotFrameType) else str(frame_type)
     if value == ShotFrameType.first.value:
-        return PromptCategory.frame_head
+        return PromptCategory.frame_head_image
     if value == ShotFrameType.last.value:
-        return PromptCategory.frame_tail
-    return PromptCategory.frame_key
+        return PromptCategory.frame_tail_image
+    return PromptCategory.frame_key_image
 

@@ -10,10 +10,11 @@ from app.models.studio import PromptCategory
 
 
 class PromptCategoryOptionRead(BaseModel):
-    """提示词类别选项（枚举值 + 中文标签）。"""
+    """提示词类别选项（枚举值 + 中文标签 + 简介）。"""
 
     value: PromptCategory = Field(..., description="类别枚举值")
     label: str = Field(..., description="中文名称")
+    description: str = Field("", description="类别简介")
 
 
 class PromptTemplateCreate(BaseModel):

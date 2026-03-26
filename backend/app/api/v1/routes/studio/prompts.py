@@ -30,25 +30,30 @@ from app.schemas.studio.prompts import (
 router = APIRouter()
 
 _ORDER_FIELDS = {"name", "category", "created_at", "updated_at"}
-_PROMPT_CATEGORY_ZH: dict[PromptCategory, str] = {
-    PromptCategory.frame_head: "首帧提示词",
-    PromptCategory.frame_tail: "尾帧提示词",
-    PromptCategory.frame_key: "关键帧提示词",
-    PromptCategory.video: "视频提示词",
-    PromptCategory.storyboard: "分镜提示词",
-    PromptCategory.bgm: "背景音乐提示词",
-    PromptCategory.sfx: "音效提示词",
-    PromptCategory.character_front: "角色正面提示词",
-    PromptCategory.character_other: "角色侧面/背面",
-    PromptCategory.actor_image_front: "演员形象正面提示词",
-    PromptCategory.actor_image_other: "演员形象侧面/背面",
-    PromptCategory.prop_front: "道具正面提示词",
-    PromptCategory.prop_other: "道具侧面/背面",
-    PromptCategory.scene_front: "场景正面提示词",
-    PromptCategory.scene_other: "场景侧面/背面",
-    PromptCategory.costume_front: "服装正面提示词",
-    PromptCategory.costume_other: "服装侧面/背面",
-    PromptCategory.combined: "组合提示词",
+_PROMPT_CATEGORY_ZH: dict[PromptCategory, tuple[str, str]] = {
+    # 用于提交给图片模型的提示词
+    PromptCategory.frame_head_image: ("首帧图片", "用于生成首帧图片的提示词"),
+    PromptCategory.frame_tail_image: ("尾帧图片", "用于生成尾帧图片的提示词"),
+    PromptCategory.frame_key_image: ("关键帧图片", "用于生成关键帧图片的提示词"),
+    PromptCategory.character_image_front: ("角色正面图片", "用于生成角色正面图片的提示词"),
+    PromptCategory.character_image_other: ("角色侧面/背面图片", "用于生成角色侧面或背面图片的提示词"),
+    PromptCategory.actor_image_front: ("演员正面图片", "用于生成演员正面图片的提示词"),
+    PromptCategory.actor_image_other: ("演员侧面/背面图片", "用于生成演员侧面或背面图片的提示词"),
+    PromptCategory.prop_image_front: ("道具正面图片", "用于生成道具正面图片的提示词"),
+    PromptCategory.prop_image_other: ("道具侧面/背面图片", "用于生成道具侧面或背面图片的提示词"),
+    PromptCategory.scene_image_front: ("场景正面图片", "用于生成场景正面图片的提示词"),
+    PromptCategory.scene_image_other: ("场景侧面/背面图片", "用于生成场景侧面或背面图片的提示词"),
+    PromptCategory.costume_image_front: ("服装正面图片", "用于生成服装正面图片的提示词"),
+    PromptCategory.costume_image_other: ("服装侧面/背面图片", "用于生成服装侧面或背面图片的提示词"),
+    # 用于提交给文本模型的提示词
+    PromptCategory.frame_head_prompt: ("首帧图片提示词", "用于生成首帧图片文案的提示词"),
+    PromptCategory.frame_tail_prompt: ("尾帧图片提示词", "用于生成尾帧图片文案的提示词"),
+    PromptCategory.frame_key_prompt: ("关键帧图片提示词", "用于生成关键帧图片文案的提示词"),
+    PromptCategory.video_prompt: ("视频提示词", "用于视频生成的整体提示词"),
+    PromptCategory.storyboard_prompt: ("分镜提示词", "用于分镜拆解与描述的提示词"),
+    PromptCategory.combined: ("组合提示词", "用于组合多段提示词的模板"),
+    PromptCategory.bgm: ("背景音乐提示词", "用于生成背景音乐描述的提示词"),
+    PromptCategory.sfx: ("音效提示词", "用于生成音效描述的提示词"),
 }
 
 
@@ -117,13 +122,10 @@ async def list_prompt_templates(
     summary="获取提示词类别枚举（含中文映射）",
 )
 async def list_prompt_categories() -> ApiResponse[list[PromptCategoryOptionRead]]:
-    items = [
-        PromptCategoryOptionRead(
-            value=category,
-            label=_PROMPT_CATEGORY_ZH.get(category, category.value),
-        )
-        for category in PromptCategory
-    ]
+    items: list[PromptCategoryOptionRead] = []
+    for category in PromptCategory:
+        label, description = _PROMPT_CATEGORY_ZH.get(category, (category.value, ""))
+        items.append(PromptCategoryOptionRead(value=category, label=label, description=description))
     return success_response(items)
 
 
