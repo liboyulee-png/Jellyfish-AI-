@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.utils import apply_keyword_filter, apply_order, paginate
 from app.dependencies import get_db
-from app.api.v1.routes.studio.entity_helpers import entity_spec, normalize_entity_type, resolve_thumbnails
+from app.services.studio import entity_spec, normalize_entity_type, resolve_thumbnails
 from app.models.studio import (
     Chapter,
     Character,
@@ -584,8 +584,8 @@ async def _list_project_asset_links(
     ids = [getattr(x, field_name) for x in items if getattr(x, field_name, None)]
     thumbnails = await resolve_thumbnails(
         db,
-        image_model=es["image_model"],
-        parent_field_name=es["id_field"],
+        image_model=es.image_model,
+        parent_field_name=es.id_field,
         parent_ids=ids,
     )
     read_model = spec["read_model"]

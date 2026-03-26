@@ -6,24 +6,17 @@ from __future__ import annotations
 将任务与上层业务实体（演员形象/道具/场景/服装/角色/镜头分镜帧）建立关联。
 """
 
-import base64
-import mimetypes
-
 from fastapi import APIRouter, Depends, HTTPException, status
-from langchain_core.prompts import PromptTemplate as LcPromptTemplate
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core import storage
 from app.core.db import async_session_maker
 from app.core.task_manager import DeliveryMode, SqlAlchemyTaskStore, TaskManager
 from app.core.task_manager.types import TaskStatus
 from app.core.tasks import ImageGenerationInput, ImageGenerationResult, ImageGenerationTask, ProviderConfig
 from app.dependencies import get_db
-from app.utils.files import create_file_from_url_or_b64
-from app.models.llm import Model, ModelCategoryKey, ModelSettings, Provider
 from app.models.studio import (
     Actor,
     ActorImage,
@@ -34,20 +27,30 @@ from app.models.studio import (
     Costume,
     CostumeImage,
     PromptCategory,
-    PromptTemplate,
     Prop,
     PropImage,
     Scene,
     SceneImage,
     ShotDetail,
     ShotCharacterLink,
-    FileItem,
     ShotFrameType,
     ShotFrameImage,
 )
 from app.models.task_links import GenerationTaskLink
 from app.schemas.common import ApiResponse, success_response
 from app.api.v1.routes.film.common import TaskCreated, _CreateOnlyTask
+from app.services.studio.image_tasks import (
+    asset_prompt_category as _asset_prompt_category,
+    build_prompt_with_template as _build_prompt_with_template,
+    is_front_view as _is_front_view,
+    load_provider_config as _load_provider_config,
+    map_view_angle_for_prompt as _map_view_angle_for_prompt,
+    resolve_front_image_ref as _resolve_front_image_ref,
+    resolve_image_model as _resolve_image_model,
+    resolve_ordered_image_refs as _resolve_ordered_image_refs,
+    shot_frame_prompt_category as _shot_frame_prompt_category,
+)
+from app.utils.files import create_file_from_url_or_b64
 
 
 router = APIRouter()
@@ -88,305 +91,6 @@ class ShotFrameImageTaskRequest(BaseModel):
     frame_type: ShotFrameType = Field(..., description="first | last | key")
 
 
-def _provider_key_from_db_name(name: str) -> str:
-    """将 Provider.name 映射为任务层 ProviderKey（openai | volcengine）。
-    规范名称：openai、火山引擎；兼容旧命名（volc/doubao/bytedance）映射为 volcengine。
-    无法映射时抛出 503。
-    """
-    n = (name or "").strip()
-    n_lower = n.lower()
-    if n_lower == "openai":
-        return "openai"
-    if n == "火山引擎" or "volc" in n_lower or "doubao" in n_lower or "bytedance" in n_lower:
-        return "volcengine"
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail=f"Unsupported provider name: {name!r}. Expected: openai, 火山引擎.",
-    )
-
-
-async def _resolve_image_model(db: AsyncSession, model_id: str | None) -> Model:
-    """根据显式 model_id 或默认图片模型解析 Model。"""
-    effective_model_id = model_id
-    if not effective_model_id:
-        settings_row = await db.get(ModelSettings, 1)
-        effective_model_id = settings_row.default_image_model_id if settings_row else None
-
-    if not effective_model_id:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="No image model configured in DB (missing explicit model_id and ModelSettings.default_image_model_id)",
-        )
-
-    model = await db.get(Model, effective_model_id)
-    if model is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Configured model_id not found in DB: {effective_model_id}",
-        )
-    if model.category != ModelCategoryKey.image:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Configured model is not an image model: {effective_model_id} (category={model.category})",
-        )
-    return model
-
-
-async def _load_provider_config(db: AsyncSession, provider_id: str) -> ProviderConfig:
-    """根据 provider_id 从 DB 解析 ProviderConfig；仅允许适用于图片生成的供应商（openai、火山引擎）。"""
-    provider = await db.get(Provider, provider_id)
-    if provider is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Provider not found for provider_id={provider_id}",
-        )
-    try:
-        provider_key = _provider_key_from_db_name(provider.name)
-    except HTTPException as e:
-        if e.status_code == status.HTTP_503_SERVICE_UNAVAILABLE and (provider.name or "").strip() == "阿里百炼":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="该供应商仅适用于文本生成，不支持图片生成（name=阿里百炼）",
-            ) from e
-        raise
-    api_key = (provider.api_key or "").strip()
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Provider api_key is empty for provider_id={provider.id}",
-        )
-    base_url = (provider.base_url or "").strip() or None
-    return ProviderConfig(provider=provider_key, api_key=api_key, base_url=base_url)  # type: ignore[arg-type]
-
-
-def _prompt_from_description(description: str, *, not_found_msg: str) -> str:
-    prompt = (description or "").strip()
-    if not prompt:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=not_found_msg)
-    return prompt
-
-
-def _is_front_view(view_angle: AssetViewAngle | str | None) -> bool:
-    if view_angle is None:
-        return False
-    value = view_angle.value if isinstance(view_angle, AssetViewAngle) else str(view_angle)
-    return value == AssetViewAngle.front.value
-
-
-def _map_view_angle_for_prompt(view_angle: AssetViewAngle | str | None) -> str:
-    if view_angle is None:
-        return ""
-    raw = view_angle.value if isinstance(view_angle, AssetViewAngle) else str(view_angle)
-    view_angle_map = {
-        "RIGH": "纯右側面,严格右侧面，90度纯侧面轮廓，耳朵清晰可见",
-        "RIGHT": "纯右側面,严格右侧面，90度纯侧面轮廓，耳朵清晰可见",
-        "LEFT": "纯左侧面,严格左侧面，90度纯侧面轮廓，耳朵清晰可见",
-        "BACK": "正后方,正后方视角，完全背对镜头，只能看到后脑勺和后背",
-    }
-    return view_angle_map.get(raw, raw)
-
-
-async def _resolve_prompt_template(
-    db: AsyncSession,
-    *,
-    category: PromptCategory,
-) -> PromptTemplate | None:
-    stmt = (
-        select(PromptTemplate)
-        .where(PromptTemplate.category == category)
-        .order_by(PromptTemplate.is_default.desc(), PromptTemplate.updated_at.desc())
-        .limit(1)
-    )
-    result = await db.execute(stmt)
-    return result.scalars().first()
-
-
-def _render_prompt_template_content(
-    content: str,
-    *,
-    variables: dict[str, object],
-) -> str:
-    tmpl = LcPromptTemplate.from_template(content)
-    render_vars = {k: str(variables.get(k, "")) for k in tmpl.input_variables}
-    return tmpl.format(**render_vars).strip()
-
-
-async def _build_prompt_with_template(
-    db: AsyncSession,
-    *,
-    category: PromptCategory,
-    variables: dict[str, object],
-    fallback_prompt: str,
-    not_found_msg: str,
-) -> str:
-    template = await _resolve_prompt_template(db, category=category)
-    if template is not None and template.content:
-        rendered = _render_prompt_template_content(template.content, variables=variables)
-        if rendered:
-            return rendered
-    return _prompt_from_description(fallback_prompt, not_found_msg=not_found_msg)
-
-
-async def _resolve_front_image_ref(
-    db: AsyncSession,
-    *,
-    image_model: type,
-    parent_field_name: str,
-    parent_id: str,
-    preferred_quality_level: object | None,
-) -> dict[str, str] | None:
-    parent_field = getattr(image_model, parent_field_name)
-    stmt = (
-        select(image_model)
-        .where(
-            parent_field == parent_id,
-            image_model.view_angle == AssetViewAngle.front,
-            image_model.file_id.is_not(None),
-        )
-        .order_by(image_model.created_at.desc(), image_model.id.desc())
-    )
-    result = await db.execute(stmt)
-    rows = result.scalars().all()
-    if not rows:
-        return None
-
-    target = rows[0]
-    if preferred_quality_level is not None:
-        for row in rows:
-            if row.quality_level == preferred_quality_level:
-                target = row
-                break
-
-    if not target.file_id:
-        return None
-
-    file_obj = await db.get(FileItem, target.file_id)
-    if file_obj is None or not file_obj.storage_key:
-        return None
-
-    try:
-        content = await storage.download_file(key=file_obj.storage_key)
-    except Exception:  # noqa: BLE001
-        return None
-    if not content:
-        return None
-
-    content_type: str | None = None
-    try:
-        info = await storage.get_file_info(key=file_obj.storage_key)
-        content_type = (info.content_type or "").strip().lower() or None
-    except Exception:  # noqa: BLE001
-        content_type = None
-
-    if not content_type:
-        guessed_type, _ = mimetypes.guess_type(file_obj.storage_key)
-        content_type = (guessed_type or "").strip().lower() or None
-
-    if not content_type or not content_type.startswith("image/"):
-        content_type = "image/png"
-
-    image_format = content_type.split("/", 1)[1].split(";", 1)[0].strip().lower() or "png"
-    encoded = base64.b64encode(content).decode("ascii")
-    data_url = f"data:image/{image_format};base64,{encoded}"
-    return {"image_url": data_url}
-
-
-async def _resolve_ordered_image_refs(
-    db: AsyncSession,
-    *,
-    image_model: type,
-    parent_field_name: str,
-    parent_id: str,
-    view_angles: tuple[AssetViewAngle, ...],
-) -> list[dict[str, str]]:
-    """按指定 view_angles 顺序，解析参考图（data url）。
-
-    - 仅取 file_id 不为空的记录；
-    - 同一 view_angle 取最新的一张（created_at desc, id desc）；
-    - 解析失败的角度会被跳过（不中断整体任务创建）。
-    """
-    parent_field = getattr(image_model, parent_field_name)
-    stmt = (
-        select(image_model)
-        .where(
-            parent_field == parent_id,
-            image_model.file_id.is_not(None),
-        )
-        .order_by(image_model.created_at.desc(), image_model.id.desc())
-    )
-    result = await db.execute(stmt)
-    rows = result.scalars().all()
-    if not rows:
-        return []
-
-    # 先按 view_angle 选“最新一张”
-    best_by_angle: dict[str, object] = {}
-    for row in rows:
-        angle = getattr(row, "view_angle", None)
-        # 显式 isinstance 以便静态类型检查器正确收窄类型。
-        key = angle.value if isinstance(angle, AssetViewAngle) else str(angle)
-        if key and key not in best_by_angle:
-            best_by_angle[key] = row
-
-    out: list[dict[str, str]] = []
-    for angle in view_angles:
-        row = best_by_angle.get(angle.value)
-        if row is None:
-            continue
-        file_id = getattr(row, "file_id", None)
-        if not file_id:
-            continue
-        file_obj = await db.get(FileItem, str(file_id))
-        if file_obj is None or not file_obj.storage_key:
-            continue
-        try:
-            content = await storage.download_file(key=file_obj.storage_key)
-        except Exception:  # noqa: BLE001
-            continue
-        if not content:
-            continue
-
-        content_type: str | None = None
-        try:
-            info = await storage.get_file_info(key=file_obj.storage_key)
-            content_type = (info.content_type or "").strip().lower() or None
-        except Exception:  # noqa: BLE001
-            content_type = None
-        if not content_type:
-            guessed_type, _ = mimetypes.guess_type(file_obj.storage_key)
-            content_type = (guessed_type or "").strip().lower() or None
-        if not content_type or not content_type.startswith("image/"):
-            content_type = "image/png"
-
-        image_format = content_type.split("/", 1)[1].split(";", 1)[0].strip().lower() or "png"
-        encoded = base64.b64encode(content).decode("ascii")
-        data_url = f"data:image/{image_format};base64,{encoded}"
-        out.append({"image_url": data_url})
-    return out
-
-
-def _asset_prompt_category(
-    *,
-    relation_type: str,
-    is_front_view: bool,
-) -> PromptCategory:
-    mapping = {
-        "actor_image": (PromptCategory.actor_image_front, PromptCategory.actor_image_other),
-        "prop_image": (PromptCategory.prop_front, PromptCategory.prop_other),
-        "scene_image": (PromptCategory.scene_front, PromptCategory.scene_other),
-        "costume_image": (PromptCategory.costume_front, PromptCategory.costume_other),
-    }
-    front_category, other_category = mapping[relation_type]
-    return front_category if is_front_view else other_category
-
-
-def _shot_frame_prompt_category(frame_type: ShotFrameType | str) -> PromptCategory:
-    value = frame_type.value if isinstance(frame_type, ShotFrameType) else str(frame_type)
-    if value == ShotFrameType.first.value:
-        return PromptCategory.frame_head
-    if value == ShotFrameType.last.value:
-        return PromptCategory.frame_tail
-    return PromptCategory.frame_key
 
 
 async def _create_image_task_and_link(
