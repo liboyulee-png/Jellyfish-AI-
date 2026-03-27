@@ -18,6 +18,7 @@ from app.chains.agents import (
     ConsistencyCheckerAgent,
     OutputCompilerAgent,
     ScriptOptimizerAgent,
+    ScriptSimplifierAgent,
     ShotElementExtractorAgent,
 )
 from app.chains.agents.script_processing_agents import (
@@ -28,6 +29,7 @@ from app.chains.agents.script_processing_agents import (
     ScriptConsistencyCheckResult,
     OutputCompileResult,
     ScriptOptimizationResult,
+    ScriptSimplificationResult,
     StudioScriptExtractionDraft,
 )
 from app.dependencies import get_llm
@@ -338,6 +340,12 @@ class ScriptOptimizeRequest(BaseModel):
     consistency: dict[str, Any] = Field(..., description="一致性检查输出（ScriptConsistencyCheckResult 序列化）")
 
 
+class ScriptSimplifyRequest(BaseModel):
+    """智能精简剧本请求。"""
+
+    script_text: str = Field(..., description="原文剧本文本", min_length=1)
+
+
 @router.post(
     "/optimize-script",
     response_model=ApiResponse[ScriptOptimizationResult],
@@ -363,6 +371,29 @@ async def optimize_script(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to optimize script: {str(e)}"
+        )
+
+
+@router.post(
+    "/simplify-script",
+    response_model=ApiResponse[ScriptSimplificationResult],
+    summary="智能精简剧本",
+    description="在保留剧情主体并保证剧情连续的前提下精简剧本文本。",
+)
+async def simplify_script(
+    request: ScriptSimplifyRequest,
+    llm: BaseChatModel = Depends(get_llm),
+) -> ApiResponse[ScriptSimplificationResult]:
+    """输入原文剧本，输出精简后的文本与精简策略摘要。"""
+    try:
+        agent = ScriptSimplifierAgent(llm)
+        result = agent.extract(script_text=request.script_text)
+        return success_response(data=result)
+    except Exception as e:
+        logger.error(f"Script simplification failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to simplify script: {str(e)}",
         )
 
 

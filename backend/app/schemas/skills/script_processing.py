@@ -230,6 +230,15 @@ class ScriptOptimizationResult(BaseModel):
     change_summary: str = Field(..., description="改动摘要（只围绕 issues）")
 
 
+class ScriptSimplificationResult(BaseModel):
+    """剧本精简输出：在保留剧情主体与连续性的前提下压缩篇幅。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    simplified_script_text: str = Field(..., description="精简后的剧本文本")
+    simplification_summary: str = Field(..., description="精简策略摘要（说明删改原则）")
+
+
 class ScriptShotExtraction(BaseModel):
     """单镜提取结果（最终输出用，引用全局实体稳定ID）。"""
 
@@ -449,6 +458,7 @@ __all__ = [
     "ScriptConsistencyIssue",
     "ScriptConsistencyCheckResult",
     "ScriptOptimizationResult",
+    "ScriptSimplificationResult",
     "ScriptShotExtraction",
     "ScriptExtractionResult",
     "StudioAssetDraft",

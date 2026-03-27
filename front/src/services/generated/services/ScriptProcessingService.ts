@@ -6,6 +6,7 @@ import type { ApiResponse_EntityMergeResult_ } from '../models/ApiResponse_Entit
 import type { ApiResponse_ScriptConsistencyCheckResult_ } from '../models/ApiResponse_ScriptConsistencyCheckResult_';
 import type { ApiResponse_ScriptDivisionResult_ } from '../models/ApiResponse_ScriptDivisionResult_';
 import type { ApiResponse_ScriptOptimizationResult_ } from '../models/ApiResponse_ScriptOptimizationResult_';
+import type { ApiResponse_ScriptSimplificationResult_ } from '../models/ApiResponse_ScriptSimplificationResult_';
 import type { ApiResponse_ShotElementExtractionResult_ } from '../models/ApiResponse_ShotElementExtractionResult_';
 import type { ApiResponse_StudioScriptExtractionDraft_ } from '../models/ApiResponse_StudioScriptExtractionDraft_';
 import type { ApiResponse_VariantAnalysisResult_ } from '../models/ApiResponse_VariantAnalysisResult_';
@@ -15,6 +16,7 @@ import type { ScriptConsistencyCheckRequest } from '../models/ScriptConsistencyC
 import type { ScriptDividerRequest } from '../models/ScriptDividerRequest';
 import type { ScriptExtractRequest } from '../models/ScriptExtractRequest';
 import type { ScriptOptimizeRequest } from '../models/ScriptOptimizeRequest';
+import type { ScriptSimplifyRequest } from '../models/ScriptSimplifyRequest';
 import type { ShotElementExtractionRequest } from '../models/ShotElementExtractionRequest';
 import type { VariantAnalysisRequest } from '../models/VariantAnalysisRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -141,6 +143,27 @@ export class ScriptProcessingService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/v1/script-processing/optimize-script',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * 智能精简剧本
+     * 在保留剧情主体并保证剧情连续的前提下精简剧本文本。
+     * @returns ApiResponse_ScriptSimplificationResult_ Successful Response
+     * @throws ApiError
+     */
+    public static simplifyScriptApiV1ScriptProcessingSimplifyScriptPost({
+        requestBody,
+    }: {
+        requestBody: ScriptSimplifyRequest,
+    }): CancelablePromise<ApiResponse_ScriptSimplificationResult_> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/v1/script-processing/simplify-script',
             body: requestBody,
             mediaType: 'application/json',
             errors: {

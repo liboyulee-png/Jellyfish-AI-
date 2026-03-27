@@ -44,6 +44,7 @@ export type { ApiResponse_RenderedPromptResponse_ } from './models/ApiResponse_R
 export type { ApiResponse_ScriptConsistencyCheckResult_ } from './models/ApiResponse_ScriptConsistencyCheckResult_';
 export type { ApiResponse_ScriptDivisionResult_ } from './models/ApiResponse_ScriptDivisionResult_';
 export type { ApiResponse_ScriptOptimizationResult_ } from './models/ApiResponse_ScriptOptimizationResult_';
+export type { ApiResponse_ScriptSimplificationResult_ } from './models/ApiResponse_ScriptSimplificationResult_';
 export type { ApiResponse_ShotCharacterLinkRead_ } from './models/ApiResponse_ShotCharacterLinkRead_';
 export type { ApiResponse_ShotDetailRead_ } from './models/ApiResponse_ShotDetailRead_';
 export type { ApiResponse_ShotDialogLineRead_ } from './models/ApiResponse_ShotDialogLineRead_';
@@ -143,6 +144,8 @@ export type { ScriptDivisionResult } from './models/ScriptDivisionResult';
 export type { ScriptExtractRequest } from './models/ScriptExtractRequest';
 export type { ScriptOptimizationResult } from './models/ScriptOptimizationResult';
 export type { ScriptOptimizeRequest } from './models/ScriptOptimizeRequest';
+export type { ScriptSimplificationResult } from './models/ScriptSimplificationResult';
+export type { ScriptSimplifyRequest } from './models/ScriptSimplifyRequest';
 export type { ShotCharacterInfo } from './models/ShotCharacterInfo';
 export type { ShotCharacterLinkCreate } from './models/ShotCharacterLinkCreate';
 export type { ShotCharacterLinkRead } from './models/ShotCharacterLinkRead';

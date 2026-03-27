@@ -14,6 +14,7 @@ from app.chains.agents.script_processing_agents import (
     VariantAnalyzerAgent,
     ConsistencyCheckerAgent,
     ScriptOptimizerAgent,
+    ScriptSimplifierAgent,
     OutputCompilerAgent,
 )
 
@@ -30,5 +31,6 @@ __all__ = [
     "VariantAnalyzerAgent",
     "ConsistencyCheckerAgent",
     "ScriptOptimizerAgent",
+    "ScriptSimplifierAgent",
     "OutputCompilerAgent",
 ]
