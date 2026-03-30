@@ -139,7 +139,7 @@ def render_prompt_template_content(
     *,
     variables: dict[str, object],
 ) -> str:
-    tmpl = LcPromptTemplate.from_template(content)
+    tmpl = LcPromptTemplate.from_template(template=content,template_format="jinja2")
     render_vars = {k: str(variables.get(k, "")) for k in tmpl.input_variables}
     return tmpl.format(**render_vars).strip()
 

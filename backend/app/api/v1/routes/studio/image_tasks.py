@@ -389,6 +389,7 @@ async def _build_actor_prompt_and_refs(
             "description": actor.description,
             "tags": ", ".join(actor.tags or []),
             "visual_style": actor.visual_style.value if hasattr(actor.visual_style, "value") else str(actor.visual_style),
+            "style": actor.style.value if hasattr(actor.style, "value") else str(actor.style),
             "view_angle": _map_view_angle_for_prompt(image_row.view_angle),
             "quality_level": image_row.quality_level,
             "format": image_row.format,
@@ -446,6 +447,7 @@ async def _build_asset_prompt_and_refs(
                 "description": asset.description,
                 "tags": ", ".join(asset.tags or []),
                 "visual_style": asset.visual_style.value if hasattr(asset.visual_style, "value") else str(asset.visual_style),
+                "style": asset.style.value if hasattr(asset.style, "value") else str(asset.style),
                 "view_angle": _map_view_angle_for_prompt(image_row.view_angle),
                 "quality_level": image_row.quality_level,
                 "format": image_row.format,
@@ -487,6 +489,7 @@ async def _build_asset_prompt_and_refs(
                 "description": asset.description,
                 "tags": ", ".join(asset.tags or []),
                 "visual_style": asset.visual_style.value if hasattr(asset.visual_style, "value") else str(asset.visual_style),
+                "style": asset.style.value if hasattr(asset.style, "value") else str(asset.style),
                 "view_angle": _map_view_angle_for_prompt(image_row.view_angle),
                 "quality_level": image_row.quality_level,
                 "format": image_row.format,
@@ -528,6 +531,7 @@ async def _build_asset_prompt_and_refs(
                 "description": asset.description,
                 "tags": ", ".join(asset.tags or []),
                 "visual_style": asset.visual_style.value if hasattr(asset.visual_style, "value") else str(asset.visual_style),
+                "style": asset.style.value if hasattr(asset.style, "value") else str(asset.style),
                 "view_angle": _map_view_angle_for_prompt(image_row.view_angle),
                 "quality_level": image_row.quality_level,
                 "format": image_row.format,
@@ -578,6 +582,7 @@ async def _build_character_prompt_and_refs(
             "name": character.name,
             "description": character.description,
             "visual_style": character.visual_style.value if hasattr(character.visual_style, "value") else str(character.visual_style),
+            "style": character.style.value if hasattr(character.style, "value") else str(character.style),
             "view_angle": _map_view_angle_for_prompt(image_row.view_angle),
             "quality_level": image_row.quality_level,
             "format": image_row.format,
@@ -652,6 +657,10 @@ async def _build_shot_frame_prompt_and_refs(
     visual_style = (
         project.visual_style.value if getattr(project, "visual_style", None) is not None and hasattr(project.visual_style, "value")
         else str(getattr(project, "visual_style", "") or "")
+    )
+    style = (
+        project.style.value if getattr(project, "style", None) is not None and hasattr(project.style, "value")
+        else str(getattr(project, "style", "") or "")
     )
 
     if frame_type == ShotFrameType.first:
@@ -733,6 +742,7 @@ async def _build_shot_frame_prompt_and_refs(
             "atmosphere": shot_detail.atmosphere,
             "mood_tags": ", ".join(shot_detail.mood_tags or []),
             "visual_style": visual_style,
+            "style": style,
             "camera_shot": shot_detail.camera_shot,
             "angle": shot_detail.angle,
             "movement": shot_detail.movement,

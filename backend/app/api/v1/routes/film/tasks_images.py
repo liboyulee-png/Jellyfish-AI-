@@ -76,6 +76,7 @@ async def create_shot_frame_prompt_task(
     # 把项目层的画面表现形式注入到提示词生成链路里。
     project = getattr(getattr(shot, "chapter", None), "project", None)
     visual_style = str(getattr(project, "visual_style", "") or "")
+    style = str(getattr(project, "style", "") or "")
     input_dict = {
         "script_excerpt": shot.script_excerpt or "",
         "title": shot.title or "",
@@ -90,6 +91,7 @@ async def create_shot_frame_prompt_task(
         "scene_id": detail.scene_id,
         "dialog_summary": dialog_summary,
         "visual_style": visual_style,
+        "style": style,
     }
     run_args: dict = {
         "shot_id": body.shot_id,
