@@ -56,6 +56,8 @@ import {
   ThunderboltOutlined,
   UploadOutlined,
   VideoCameraAddOutlined,
+  PlusOutlined,
+  UserOutlined,
 } from '@ant-design/icons'
 import { useParams, Link } from 'react-router-dom'
 import {
@@ -87,7 +89,7 @@ import type {
   ShotStatus,
 } from '../../../services/generated'
 import { listTaskLinksNormalized } from '../../../services/filmTaskLinks'
-import { buildFileDownloadUrl } from '../assets/utils'
+import { buildFileDownloadUrl, resolveAssetUrl } from '../assets/utils'
 import type { Chapter } from '../../../mocks/data'
 import './chapterStudio.separation.css'
 
@@ -568,7 +570,7 @@ const ChapterStudio: React.FC = () => {
   }
 
   const refreshPromptAssetLinks = async (shotId: string) => {
-    const [scenes, actors] = await Promise.all([
+    const [scenes, actors, props, costumes] = await Promise.all([
       StudioShotLinksService.listProjectEntityLinksApiV1StudioShotLinksEntityTypeGet({
         entityType: 'scene',
         projectId: projectId ?? null,
@@ -591,9 +593,77 @@ const ChapterStudio: React.FC = () => {
         page: 1,
         pageSize: 100,
       }).then((r: any) => (r.data?.items ?? []) as ProjectActorLinkRead[]),
+      StudioShotLinksService.listProjectEntityLinksApiV1StudioShotLinksEntityTypeGet({
+        entityType: 'prop',
+        projectId: projectId ?? null,
+        chapterId: chapterId ?? null,
+        shotId,
+        assetId: null,
+        order: null,
+        isDesc: false,
+        page: 1,
+        pageSize: 100,
+      }).then((r: any) => (r.data?.items ?? []) as ProjectPropLinkRead[]),
+      StudioShotLinksService.listProjectEntityLinksApiV1StudioShotLinksEntityTypeGet({
+        entityType: 'costume',
+        projectId: projectId ?? null,
+        chapterId: chapterId ?? null,
+        shotId,
+        assetId: null,
+        order: null,
+        isDesc: false,
+        page: 1,
+        pageSize: 100,
+      }).then((r: any) => (r.data?.items ?? []) as ProjectCostumeLinkRead[]),
     ])
     setSceneLinks(scenes)
     setActorImageLinks(actors)
+    setPropLinks(props)
+    setCostumeLinks(costumes)
+  }
+
+  const updatePromptProps = async (propIds: string[]) => {
+    if (!selectedShotId || !projectId) return
+    const next = Array.from(new Set(propIds.map((x) => x.trim()).filter(Boolean)))
+    setPromptAssetsUpdating(true)
+    try {
+      const currentLinks = propLinks.filter((l) => (l.shot_id ?? null) === selectedShotId)
+      await Promise.all(currentLinks.map((l) => StudioShotLinksService.deleteProjectPropLinkApiV1StudioShotLinksPropLinkIdDelete({ linkId: l.id })))
+      await Promise.all(
+        next.map((pid) =>
+          StudioShotLinksService.createProjectPropLinkApiV1StudioShotLinksPropPost({
+            requestBody: { project_id: projectId, chapter_id: chapterId ?? null, shot_id: selectedShotId, asset_id: pid },
+          }),
+        ),
+      )
+      await refreshPromptAssetLinks(selectedShotId)
+    } catch {
+      message.error('更新道具失败')
+    } finally {
+      setPromptAssetsUpdating(false)
+    }
+  }
+
+  const updatePromptCostumes = async (costumeIds: string[]) => {
+    if (!selectedShotId || !projectId) return
+    const next = Array.from(new Set(costumeIds.map((x) => x.trim()).filter(Boolean)))
+    setPromptAssetsUpdating(true)
+    try {
+      const currentLinks = costumeLinks.filter((l) => (l.shot_id ?? null) === selectedShotId)
+      await Promise.all(currentLinks.map((l) => StudioShotLinksService.deleteProjectCostumeLinkApiV1StudioShotLinksCostumeLinkIdDelete({ linkId: l.id })))
+      await Promise.all(
+        next.map((cid) =>
+          StudioShotLinksService.createProjectCostumeLinkApiV1StudioShotLinksCostumePost({
+            requestBody: { project_id: projectId, chapter_id: chapterId ?? null, shot_id: selectedShotId, asset_id: cid },
+          }),
+        ),
+      )
+      await refreshPromptAssetLinks(selectedShotId)
+    } catch {
+      message.error('更新服装失败')
+    } finally {
+      setPromptAssetsUpdating(false)
+    }
   }
 
   const updatePromptScene = async (sceneId?: string) => {
@@ -1789,11 +1859,14 @@ const ChapterStudio: React.FC = () => {
               }}
             >
               <Inspector
+                projectId={projectId}
                 loadingDetail={loadingDetail}
                 shotDetail={shotDetail}
                 dialogLines={dialogLines}
                 frameImages={frameImages}
                 sceneLinks={sceneLinks}
+                propLinks={propLinks}
+                costumeLinks={costumeLinks}
                 shotCharacterLinks={shotCharacterLinks}
                 cameraUpdating={cameraUpdating}
                 promptAssetsUpdating={promptAssetsUpdating}
@@ -1801,6 +1874,8 @@ const ChapterStudio: React.FC = () => {
                 onDeleteDialogLine={deleteDialogLine}
                 onUpdatePromptScene={updatePromptScene}
                 onUpdatePromptActors={updatePromptActors}
+                onUpdatePromptProps={updatePromptProps}
+                onUpdatePromptCostumes={updatePromptCostumes}
                 selectedShot={selectedShot}
                 onUpdateShotTitle={updateShotTitleInOps}
                 onUpdateShotScriptExcerpt={updateShotScriptExcerptInOps}
@@ -1847,11 +1922,14 @@ const ChapterStudio: React.FC = () => {
                 />
                 <div className="flex-1 min-w-0 overflow-hidden">
                   <Inspector
+                    projectId={projectId}
                     loadingDetail={loadingDetail}
                     shotDetail={shotDetail}
                     dialogLines={dialogLines}
                     frameImages={frameImages}
                     sceneLinks={sceneLinks}
+                    propLinks={propLinks}
+                    costumeLinks={costumeLinks}
                     shotCharacterLinks={shotCharacterLinks}
                     cameraUpdating={cameraUpdating}
                     promptAssetsUpdating={promptAssetsUpdating}
@@ -1859,6 +1937,8 @@ const ChapterStudio: React.FC = () => {
                     onDeleteDialogLine={deleteDialogLine}
                     onUpdatePromptScene={updatePromptScene}
                     onUpdatePromptActors={updatePromptActors}
+                    onUpdatePromptProps={updatePromptProps}
+                    onUpdatePromptCostumes={updatePromptCostumes}
                     selectedShot={selectedShot}
                     onUpdateShotTitle={updateShotTitleInOps}
                     onUpdateShotScriptExcerpt={updateShotScriptExcerptInOps}
@@ -1919,11 +1999,14 @@ const ChapterStudio: React.FC = () => {
 export default ChapterStudio
 
 function Inspector(props: {
+  projectId?: string
   loadingDetail: boolean
   shotDetail: ShotDetailRead | null
   dialogLines: ShotDialogLineRead[]
   frameImages: ShotFrameImageRead[]
   sceneLinks: ProjectSceneLinkRead[]
+  propLinks: ProjectPropLinkRead[]
+  costumeLinks: ProjectCostumeLinkRead[]
   shotCharacterLinks: ShotCharacterLinkRead[]
   cameraUpdating: boolean
   promptAssetsUpdating: boolean
@@ -1931,6 +2014,8 @@ function Inspector(props: {
   onDeleteDialogLine: (lineId: number) => Promise<void>
   onUpdatePromptScene: (sceneId?: string) => Promise<void>
   onUpdatePromptActors: (actorIds: string[]) => Promise<void>
+  onUpdatePromptProps: (propIds: string[]) => Promise<void>
+  onUpdatePromptCostumes: (costumeIds: string[]) => Promise<void>
   selectedShot: StudioShot | null
   onUpdateShotTitle: (shotId: string, title: string) => Promise<void>
   onUpdateShotScriptExcerpt: (shotId: string, script_excerpt: string) => Promise<void>
@@ -1941,11 +2026,14 @@ function Inspector(props: {
   onSelectPreviewVideo: (fileId: string) => void
 }) {
   const {
+    projectId,
     loadingDetail,
     shotDetail,
     dialogLines,
     frameImages,
     sceneLinks,
+    propLinks,
+    costumeLinks,
     shotCharacterLinks,
     cameraUpdating,
     promptAssetsUpdating,
@@ -1953,6 +2041,8 @@ function Inspector(props: {
     onDeleteDialogLine,
     onUpdatePromptScene,
     onUpdatePromptActors,
+    onUpdatePromptProps,
+    onUpdatePromptCostumes,
     selectedShot,
     onUpdateShotTitle,
     onUpdateShotScriptExcerpt,
@@ -1974,6 +2064,30 @@ function Inspector(props: {
   const [inspectorTabKey, setInspectorTabKey] = useState('camera')
   const [sceneNameMap, setSceneNameMap] = useState<Record<string, string>>({})
   const [characterNameMap, setCharacterNameMap] = useState<Record<string, string>>({})
+  const [characterThumbMap, setCharacterThumbMap] = useState<Record<string, string>>({})
+  const [linkRoleOpen, setLinkRoleOpen] = useState(false)
+  const [linkRoleLoading, setLinkRoleLoading] = useState(false)
+  const [linkRoleSelectedIds, setLinkRoleSelectedIds] = useState<string[]>([])
+  const [projectRoleOptions, setProjectRoleOptions] = useState<
+    Array<{ value: string; label: React.ReactNode; searchLabel: string; disabled?: boolean }>
+  >([])
+  const [sceneThumbMap, setSceneThumbMap] = useState<Record<string, string>>({})
+  const [propThumbMap, setPropThumbMap] = useState<Record<string, string>>({})
+  const [costumeThumbMap, setCostumeThumbMap] = useState<Record<string, string>>({})
+
+  const [linkSceneOpen, setLinkSceneOpen] = useState(false)
+  const [linkSceneLoading, setLinkSceneLoading] = useState(false)
+  const [projectSceneOptions, setProjectSceneOptions] = useState<Array<{ value: string; label: React.ReactNode; searchLabel: string }>>([])
+
+  const [linkPropOpen, setLinkPropOpen] = useState(false)
+  const [linkPropLoading, setLinkPropLoading] = useState(false)
+  const [linkPropSelectedIds, setLinkPropSelectedIds] = useState<string[]>([])
+  const [projectPropOptions, setProjectPropOptions] = useState<Array<{ value: string; label: React.ReactNode; searchLabel: string; disabled?: boolean }>>([])
+
+  const [linkCostumeOpen, setLinkCostumeOpen] = useState(false)
+  const [linkCostumeLoading, setLinkCostumeLoading] = useState(false)
+  const [linkCostumeSelectedIds, setLinkCostumeSelectedIds] = useState<string[]>([])
+  const [projectCostumeOptions, setProjectCostumeOptions] = useState<Array<{ value: string; label: React.ReactNode; searchLabel: string; disabled?: boolean }>>([])
   const [opsTitleDraft, setOpsTitleDraft] = useState('')
   const [opsNoteDraft, setOpsNoteDraft] = useState('')
   const opsTitleSaveTimerRef = useRef<number | null>(null)
@@ -2114,6 +2228,136 @@ function Inspector(props: {
   const sceneIds = useMemo(() => Array.from(new Set(sceneLinks.map((x) => x.scene_id).filter(Boolean))), [sceneLinks])
   const characterIds = useMemo(() => Array.from(new Set(shotCharacterLinks.map((x) => x.character_id).filter(Boolean))), [shotCharacterLinks])
 
+  const linkedCharacterIds = useMemo(() => characterIds, [characterIds])
+  const linkedSceneId = useMemo(() => {
+    if (!selectedShot?.id) return null
+    return sceneLinks.find((l) => (l.shot_id ?? null) === selectedShot.id)?.scene_id ?? shotDetail?.scene_id ?? null
+  }, [sceneLinks, selectedShot?.id, shotDetail?.scene_id])
+  const linkedPropIds = useMemo(() => {
+    if (!selectedShot?.id) return []
+    return Array.from(new Set(propLinks.filter((l) => (l.shot_id ?? null) === selectedShot.id).map((l) => l.prop_id).filter(Boolean))) as string[]
+  }, [propLinks, selectedShot?.id])
+  const linkedCostumeIds = useMemo(() => {
+    if (!selectedShot?.id) return []
+    return Array.from(new Set(costumeLinks.filter((l) => (l.shot_id ?? null) === selectedShot.id).map((l) => l.costume_id).filter(Boolean))) as string[]
+  }, [costumeLinks, selectedShot?.id])
+
+  const loadProjectRoleOptions = async () => {
+    if (!projectId) {
+      setProjectRoleOptions([])
+      return
+    }
+    setLinkRoleLoading(true)
+    try {
+      const res = await StudioEntitiesApi.list('character', { page: 1, pageSize: 20, q: null })
+      const items = (res.data?.items ?? []).filter((x: any) => x?.project_id === projectId)
+      const opts = items.map((c: any) => {
+        const id = String(c?.id ?? '')
+        const name = String(c?.name ?? id)
+        const thumb = typeof c?.thumbnail === 'string' ? c.thumbnail : ''
+        const disabled = linkedCharacterIds.includes(id)
+        return {
+          value: id,
+          searchLabel: name,
+          disabled,
+          label: (
+            <div className="flex items-center gap-2 min-w-0">
+              {thumb ? (
+                <img src={resolveAssetUrl(thumb)} alt="" className="w-6 h-6 rounded object-cover shrink-0" />
+              ) : (
+                <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center text-gray-400 shrink-0">
+                  <UserOutlined />
+                </div>
+              )}
+              <div className="min-w-0 truncate">{name}</div>
+            </div>
+          ),
+        }
+      })
+      setProjectRoleOptions(opts)
+    } catch {
+      setProjectRoleOptions([])
+    } finally {
+      setLinkRoleLoading(false)
+    }
+  }
+
+  const loadProjectAssetOptions = async (kind: 'scene' | 'prop' | 'costume') => {
+    if (!projectId) return
+    if (kind === 'scene') setLinkSceneLoading(true)
+    if (kind === 'prop') setLinkPropLoading(true)
+    if (kind === 'costume') setLinkCostumeLoading(true)
+    try {
+      const res = await StudioShotLinksService.listProjectEntityLinksApiV1StudioShotLinksEntityTypeGet({
+        entityType: kind,
+        projectId,
+        chapterId: null,
+        shotId: null,
+        assetId: null,
+        order: null,
+        isDesc: false,
+        page: 1,
+        pageSize: 20,
+      })
+      const items = (res.data?.items ?? []) as any[]
+      const ids = Array.from(
+        new Set(
+          items
+            .map((it) => (kind === 'scene' ? it.scene_id : kind === 'prop' ? it.prop_id : it.costume_id))
+            .filter(Boolean)
+            .map((x) => String(x)),
+        ),
+      )
+      const details = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const r = await StudioEntitiesApi.get(kind as any, id)
+            const d = (r.data ?? null) as any
+            return { id, name: String(d?.name ?? id), thumb: typeof d?.thumbnail === 'string' ? d.thumbnail : '' }
+          } catch {
+            return { id, name: id, thumb: '' }
+          }
+        }),
+      )
+      const nextThumbMap: Record<string, string> = {}
+      details.forEach((d) => {
+        if (d.thumb) nextThumbMap[d.id] = d.thumb
+      })
+      if (kind === 'scene') setSceneThumbMap(nextThumbMap)
+      if (kind === 'prop') setPropThumbMap(nextThumbMap)
+      if (kind === 'costume') setCostumeThumbMap(nextThumbMap)
+
+      const makeLabel = (d: { id: string; name: string; thumb: string }) => (
+        <div className="flex items-center gap-2 min-w-0">
+          {d.thumb ? (
+            <img src={resolveAssetUrl(d.thumb)} alt="" className="w-6 h-6 rounded object-cover shrink-0" />
+          ) : (
+            <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center text-gray-400 shrink-0">
+              <UserOutlined />
+            </div>
+          )}
+          <div className="min-w-0 truncate">{d.name}</div>
+        </div>
+      )
+
+      if (kind === 'scene') {
+        setProjectSceneOptions(details.map((d) => ({ value: d.id, searchLabel: d.name, label: makeLabel(d) })))
+      } else if (kind === 'prop') {
+        setProjectPropOptions(
+          details.map((d) => ({ value: d.id, searchLabel: d.name, label: makeLabel(d), disabled: linkedPropIds.includes(d.id) })),
+        )
+      } else {
+        setProjectCostumeOptions(
+          details.map((d) => ({ value: d.id, searchLabel: d.name, label: makeLabel(d), disabled: linkedCostumeIds.includes(d.id) })),
+        )
+      }
+    } finally {
+      if (kind === 'scene') setLinkSceneLoading(false)
+      if (kind === 'prop') setLinkPropLoading(false)
+      if (kind === 'costume') setLinkCostumeLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (sceneIds.length === 0) {
       setSceneNameMap({})
@@ -2138,6 +2382,7 @@ function Inspector(props: {
   useEffect(() => {
     if (characterIds.length === 0) {
       setCharacterNameMap({})
+      setCharacterThumbMap({})
       return
     }
     void (async () => {
@@ -2145,14 +2390,23 @@ function Inspector(props: {
         characterIds.map(async (id) => {
           try {
             const r = await StudioEntitiesApi.get('character', id)
-            const d = r.data as { name?: string } | null | undefined
-            return [id, d?.name?.trim() || id] as const
+            const d = r.data as { name?: string; thumbnail?: string | null } | null | undefined
+            const name = d?.name?.trim() || id
+            const thumb = typeof d?.thumbnail === 'string' && d.thumbnail.trim() ? d.thumbnail.trim() : ''
+            return { id, name, thumb }
           } catch {
-            return [id, id] as const
+            return { id, name: id, thumb: '' }
           }
         }),
       )
-      setCharacterNameMap(Object.fromEntries(entries))
+      const nextNameMap: Record<string, string> = {}
+      const nextThumbMap: Record<string, string> = {}
+      entries.forEach((e) => {
+        nextNameMap[e.id] = e.name
+        if (e.thumb) nextThumbMap[e.id] = e.thumb
+      })
+      setCharacterNameMap(nextNameMap)
+      setCharacterThumbMap(nextThumbMap)
     })()
   }, [characterIds])
 
@@ -3022,6 +3276,159 @@ function Inspector(props: {
                           </div>
                         )}
                         <Modal title={`${frameLabel[ft]}图片`} open={st.modalOpen} onCancel={() => updateCardState(ft, { modalOpen: false })} footer={null} width={720}>
+                          {ft === 'first' ? (
+                            <div className="mb-3">
+                              <div className="text-sm text-gray-600 mb-2">关联角色</div>
+                              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                                <button
+                                  type="button"
+                                  className="w-12 h-12 rounded border border-dashed border-gray-300 flex items-center justify-center text-gray-500 shrink-0 hover:border-gray-400 hover:text-gray-700"
+                                  disabled={promptAssetsUpdating || linkRoleLoading}
+                                  onClick={() => {
+                                    setLinkRoleSelectedIds([])
+                                    setLinkRoleOpen(true)
+                                    void loadProjectRoleOptions()
+                                  }}
+                                  title="添加关联角色"
+                                >
+                                  <PlusOutlined />
+                                </button>
+                                {linkedCharacterIds.length === 0 ? (
+                                  <div className="text-xs text-gray-400">暂无关联角色</div>
+                                ) : (
+                                  linkedCharacterIds.map((cid) => {
+                                    const thumb = characterThumbMap[cid]
+                                    const name = characterNameMap[cid] ?? cid
+                                    return thumb ? (
+                                    <Image
+                                        key={cid}
+                                        width={48}
+                                        height={48}
+                                        style={{ objectFit: 'cover', borderRadius: 8 }}
+                                        src={resolveAssetUrl(thumb)}
+                                        preview={{ src: resolveAssetUrl(thumb) }}
+                                      />
+                                    ) : (
+                                      <div
+                                        key={cid}
+                                        title={name}
+                                        className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center text-gray-400 shrink-0"
+                                      >
+                                        <UserOutlined />
+                                      </div>
+                                    )
+                                  })
+                                )}
+                              </div>
+
+                              <div className="mt-3 text-sm text-gray-600 mb-2">关联场景</div>
+                              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                                <button
+                                  type="button"
+                                  className="w-12 h-12 rounded border border-dashed border-gray-300 flex items-center justify-center text-gray-500 shrink-0 hover:border-gray-400 hover:text-gray-700"
+                                  disabled={promptAssetsUpdating || linkSceneLoading}
+                                  onClick={() => {
+                                    setLinkSceneOpen(true)
+                                    void loadProjectAssetOptions('scene')
+                                  }}
+                                  title="添加/更换关联场景"
+                                >
+                                  <PlusOutlined />
+                                </button>
+                                {linkedSceneId ? (
+                                  sceneThumbMap[linkedSceneId] ? (
+                                    <Image
+                                      key={linkedSceneId}
+                                      width={48}
+                                      height={48}
+                                      style={{ objectFit: 'cover', borderRadius: 8 }}
+                                      src={resolveAssetUrl(sceneThumbMap[linkedSceneId])}
+                                      preview={{ src: resolveAssetUrl(sceneThumbMap[linkedSceneId]) }}
+                                    />
+                                  ) : (
+                                    <div className="text-xs text-gray-400">已关联场景：{sceneNameMap[linkedSceneId] ?? linkedSceneId}</div>
+                                  )
+                                ) : (
+                                  <div className="text-xs text-gray-400">暂无关联场景</div>
+                                )}
+                              </div>
+
+                              <div className="mt-3 text-sm text-gray-600 mb-2">关联道具</div>
+                              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                                <button
+                                  type="button"
+                                  className="w-12 h-12 rounded border border-dashed border-gray-300 flex items-center justify-center text-gray-500 shrink-0 hover:border-gray-400 hover:text-gray-700"
+                                  disabled={promptAssetsUpdating || linkPropLoading}
+                                  onClick={() => {
+                                    setLinkPropSelectedIds([])
+                                    setLinkPropOpen(true)
+                                    void loadProjectAssetOptions('prop')
+                                  }}
+                                  title="添加关联道具"
+                                >
+                                  <PlusOutlined />
+                                </button>
+                                {linkedPropIds.length === 0 ? (
+                                  <div className="text-xs text-gray-400">暂无关联道具</div>
+                                ) : (
+                                  linkedPropIds.map((pid) =>
+                                    propThumbMap[pid] ? (
+                                      <Image
+                                        key={pid}
+                                        width={48}
+                                        height={48}
+                                        style={{ objectFit: 'cover', borderRadius: 8 }}
+                                        src={resolveAssetUrl(propThumbMap[pid])}
+                                        preview={{ src: resolveAssetUrl(propThumbMap[pid]) }}
+                                      />
+                                    ) : (
+                                      <div key={pid} className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center text-gray-400 shrink-0">
+                                        <UserOutlined />
+                                      </div>
+                                    ),
+                                  )
+                                )}
+                              </div>
+
+                              <div className="mt-3 text-sm text-gray-600 mb-2">关联服装</div>
+                              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                                <button
+                                  type="button"
+                                  className="w-12 h-12 rounded border border-dashed border-gray-300 flex items-center justify-center text-gray-500 shrink-0 hover:border-gray-400 hover:text-gray-700"
+                                  disabled={promptAssetsUpdating || linkCostumeLoading}
+                                  onClick={() => {
+                                    setLinkCostumeSelectedIds([])
+                                    setLinkCostumeOpen(true)
+                                    void loadProjectAssetOptions('costume')
+                                  }}
+                                  title="添加关联服装"
+                                >
+                                  <PlusOutlined />
+                                </button>
+                                {linkedCostumeIds.length === 0 ? (
+                                  <div className="text-xs text-gray-400">暂无关联服装</div>
+                                ) : (
+                                  linkedCostumeIds.map((cid) =>
+                                    costumeThumbMap[cid] ? (
+                                      <Image
+                                        key={cid}
+                                        width={48}
+                                        height={48}
+                                        style={{ objectFit: 'cover', borderRadius: 8 }}
+                                        src={resolveAssetUrl(costumeThumbMap[cid])}
+                                        preview={{ src: resolveAssetUrl(costumeThumbMap[cid]) }}
+                                      />
+                                    ) : (
+                                      <div key={cid} className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center text-gray-400 shrink-0">
+                                        <UserOutlined />
+                                      </div>
+                                    ),
+                                  )
+                                )}
+                              </div>
+                            </div>
+                          ) : null}
+
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                             {st.thumbs.map((it) => {
                               const inUse = inUseFileId && inUseFileId === it.fileId
@@ -3041,6 +3448,149 @@ function Inspector(props: {
                               )
                             })}
                           </div>
+
+                          <Modal
+                            title="关联角色"
+                            open={linkRoleOpen}
+                            onCancel={() => setLinkRoleOpen(false)}
+                            footer={null}
+                            destroyOnClose
+                            width={560}
+                          >
+                            <div className="space-y-2">
+                              <div className="text-xs text-gray-500">来源：当前项目全部角色（选择后立即保存；已关联的角色不可重复选择）</div>
+                              <Select
+                                mode="multiple"
+                                className="w-full"
+                                placeholder="选择要关联到当前分镜的角色"
+                                value={linkRoleSelectedIds}
+                                loading={linkRoleLoading}
+                                disabled={promptAssetsUpdating}
+                                options={projectRoleOptions}
+                                optionFilterProp="searchLabel"
+                                showSearch
+                                filterOption={(input: string, option?: any) =>
+                                  String(option?.searchLabel ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                                onChange={(vals: Array<string | number>) => {
+                                  const nextNew = (vals ?? []).map((v) => String(v)).filter(Boolean)
+                                  setLinkRoleSelectedIds(nextNew)
+                                  const merged = Array.from(new Set([...linkedCharacterIds, ...nextNew]))
+                                  void (async () => {
+                                    await onUpdatePromptActors(merged)
+                                    setLinkRoleOpen(false)
+                                    setLinkRoleSelectedIds([])
+                                  })()
+                                }}
+                              />
+                            </div>
+                          </Modal>
+
+                          <Modal
+                            title="关联场景"
+                            open={linkSceneOpen}
+                            onCancel={() => setLinkSceneOpen(false)}
+                            footer={null}
+                            destroyOnClose
+                            width={560}
+                          >
+                            <div className="space-y-2">
+                              <div className="text-xs text-gray-500">来源：当前项目场景（选择后立即保存）</div>
+                              <Select
+                                className="w-full"
+                                placeholder="选择要关联到当前分镜的场景"
+                                value={linkedSceneId ?? undefined}
+                                loading={linkSceneLoading}
+                                disabled={promptAssetsUpdating}
+                                options={projectSceneOptions}
+                                optionFilterProp="searchLabel"
+                                showSearch
+                                filterOption={(input: string, option?: any) =>
+                                  String(option?.searchLabel ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                                onChange={(v: string) => {
+                                  void (async () => {
+                                    await onUpdatePromptScene(v)
+                                    setLinkSceneOpen(false)
+                                  })()
+                                }}
+                              />
+                            </div>
+                          </Modal>
+
+                          <Modal
+                            title="关联道具"
+                            open={linkPropOpen}
+                            onCancel={() => setLinkPropOpen(false)}
+                            footer={null}
+                            destroyOnClose
+                            width={560}
+                          >
+                            <div className="space-y-2">
+                              <div className="text-xs text-gray-500">来源：当前项目道具（选择后立即保存；已关联的不可重复选择）</div>
+                              <Select
+                                mode="multiple"
+                                className="w-full"
+                                placeholder="选择要关联到当前分镜的道具"
+                                value={linkPropSelectedIds}
+                                loading={linkPropLoading}
+                                disabled={promptAssetsUpdating}
+                                options={projectPropOptions}
+                                optionFilterProp="searchLabel"
+                                showSearch
+                                filterOption={(input: string, option?: any) =>
+                                  String(option?.searchLabel ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                                onChange={(vals: Array<string | number>) => {
+                                  const nextNew = (vals ?? []).map((v) => String(v)).filter(Boolean)
+                                  setLinkPropSelectedIds(nextNew)
+                                  const merged = Array.from(new Set([...linkedPropIds, ...nextNew]))
+                                  void (async () => {
+                                    await onUpdatePromptProps(merged)
+                                    setLinkPropOpen(false)
+                                    setLinkPropSelectedIds([])
+                                  })()
+                                }}
+                              />
+                            </div>
+                          </Modal>
+
+                          <Modal
+                            title="关联服装"
+                            open={linkCostumeOpen}
+                            onCancel={() => setLinkCostumeOpen(false)}
+                            footer={null}
+                            destroyOnClose
+                            width={560}
+                          >
+                            <div className="space-y-2">
+                              <div className="text-xs text-gray-500">来源：当前项目服装（选择后立即保存；已关联的不可重复选择）</div>
+                              <Select
+                                mode="multiple"
+                                className="w-full"
+                                placeholder="选择要关联到当前分镜的服装"
+                                value={linkCostumeSelectedIds}
+                                loading={linkCostumeLoading}
+                                disabled={promptAssetsUpdating}
+                                options={projectCostumeOptions}
+                                optionFilterProp="searchLabel"
+                                showSearch
+                                filterOption={(input: string, option?: any) =>
+                                  String(option?.searchLabel ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                                onChange={(vals: Array<string | number>) => {
+                                  const nextNew = (vals ?? []).map((v) => String(v)).filter(Boolean)
+                                  setLinkCostumeSelectedIds(nextNew)
+                                  const merged = Array.from(new Set([...linkedCostumeIds, ...nextNew]))
+                                  void (async () => {
+                                    await onUpdatePromptCostumes(merged)
+                                    setLinkCostumeOpen(false)
+                                    setLinkCostumeSelectedIds([])
+                                  })()
+                                }}
+                              />
+                            </div>
+                          </Modal>
                         </Modal>
                       </div>
                     )
