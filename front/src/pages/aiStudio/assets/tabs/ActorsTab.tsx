@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, Card, Empty, Input, Modal, Pagination, Space, Tag, message } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { StudioEntitiesApi } from '../../../../services/studioEntities'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { resolveAssetUrl } from '../utils'
 import { DisplayImageCard } from '../components/DisplayImageCard'
 import { ActorEntityFormModal, type ActorEntityLike } from '../components/ActorEntityFormModal'
 
 export function ActorsTab() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [actors, setActors] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -18,6 +19,11 @@ export function ActorsTab() {
 
   const [editOpen, setEditOpen] = useState(false)
   const [editing, setEditing] = useState<ActorEntityLike | null>(null)
+  const [fromShotCreateContext, setFromShotCreateContext] = useState<{
+    projectId: string
+    chapterId: string
+    shotId: string
+  } | null>(null)
 
   const load = async (opts?: { page?: number; pageSize?: number; q?: string }) => {
     setLoading(true)
@@ -47,21 +53,54 @@ export function ActorsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize])
 
+  useEffect(() => {
+    const create = searchParams.get('create')
+    const tab = searchParams.get('tab')
+    const projectId = searchParams.get('projectId')?.trim() ?? ''
+    const chapterId = searchParams.get('chapterId')?.trim() ?? ''
+    const shotId = searchParams.get('shotId')?.trim() ?? ''
+    if (create === '1' && tab === 'actor') {
+      setEditing(null)
+      if (projectId && chapterId && shotId) {
+        setFromShotCreateContext({ projectId, chapterId, shotId })
+      } else {
+        setFromShotCreateContext(null)
+      }
+      setEditOpen(true)
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          next.delete('create')
+          next.delete('name')
+          next.delete('desc')
+          next.delete('projectId')
+          next.delete('chapterId')
+          next.delete('shotId')
+          return next
+        },
+        { replace: true },
+      )
+    }
+  }, [searchParams, setSearchParams])
+
   const filtered = useMemo(() => actors, [actors])
 
   const openCreate = () => {
     setEditing(null)
+    setFromShotCreateContext(null)
     setEditOpen(true)
   }
 
   const openEdit = (a: ActorEntityLike) => {
     setEditing(a)
+    setFromShotCreateContext(null)
     setEditOpen(true)
   }
 
   const handleModalCancel = () => {
     setEditOpen(false)
     setEditing(null)
+    setFromShotCreateContext(null)
   }
 
   return (
@@ -164,6 +203,9 @@ export function ActorsTab() {
       <ActorEntityFormModal
         open={editOpen}
         editing={editing}
+        linkProjectId={fromShotCreateContext?.projectId}
+        linkChapterId={fromShotCreateContext?.chapterId}
+        linkShotId={fromShotCreateContext?.shotId}
         onCancel={handleModalCancel}
         onSuccess={async (detail) => {
           const createdItem = detail?.created as { id?: string } | undefined

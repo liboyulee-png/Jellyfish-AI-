@@ -24,12 +24,16 @@ export function ActorEntityFormModal({
   open,
   editing,
   linkProjectId,
+  linkChapterId,
+  linkShotId,
   onCancel,
   onSuccess,
 }: {
   open: boolean
   editing: ActorEntityLike | null
   linkProjectId?: string
+  linkChapterId?: string
+  linkShotId?: string
   onCancel: () => void
   onSuccess: (detail?: { created?: unknown }) => void | Promise<void>
 }) {
@@ -80,6 +84,8 @@ export function ActorEntityFormModal({
           style: formStyle,
           prompt_template_id: null,
           ...(linkProjectId ? { project_id: linkProjectId } : {}),
+          ...(linkProjectId && linkChapterId ? { chapter_id: linkChapterId } : {}),
+          ...(linkProjectId && linkShotId ? { shot_id: linkShotId } : {}),
         })
         message.success('创建成功')
         onCancel()

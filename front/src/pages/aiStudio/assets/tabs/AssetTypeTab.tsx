@@ -57,6 +57,11 @@ export function AssetTypeTab({
   const [editOpen, setEditOpen] = useState(false)
   const [editing, setEditing] = useState<StudioAssetLike | null>(null)
   const [createSeed, setCreateSeed] = useState<{ name: string; desc: string } | null>(null)
+  const [fromShotCreateContext, setFromShotCreateContext] = useState<{
+    projectId: string
+    chapterId: string
+    shotId: string
+  } | null>(null)
 
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewUrl, setPreviewUrl] = useState('')
@@ -91,6 +96,7 @@ export function AssetTypeTab({
   const openCreate = () => {
     setEditing(null)
     setCreateSeed(null)
+    setFromShotCreateContext(null)
     setEditOpen(true)
   }
 
@@ -99,9 +105,17 @@ export function AssetTypeTab({
     const name = searchParams.get('name') ?? ''
     const desc = searchParams.get('desc') ?? ''
     const tab = searchParams.get('tab')
+    const projectId = searchParams.get('projectId')?.trim() ?? ''
+    const chapterId = searchParams.get('chapterId')?.trim() ?? ''
+    const shotId = searchParams.get('shotId')?.trim() ?? ''
     if (create === '1' && tab === tabKey) {
       setEditing(null)
       setCreateSeed({ name, desc })
+      if (projectId && chapterId && shotId) {
+        setFromShotCreateContext({ projectId, chapterId, shotId })
+      } else {
+        setFromShotCreateContext(null)
+      }
       setEditOpen(true)
       setSearchParams(
         (prev) => {
@@ -109,6 +123,9 @@ export function AssetTypeTab({
           next.delete('create')
           next.delete('name')
           next.delete('desc')
+          next.delete('projectId')
+          next.delete('chapterId')
+          next.delete('shotId')
           return next
         },
         { replace: true },
@@ -119,6 +136,7 @@ export function AssetTypeTab({
   const openEdit = (asset: StudioAssetLike) => {
     setEditing(asset)
     setCreateSeed(null)
+    setFromShotCreateContext(null)
     setEditOpen(true)
   }
 
@@ -134,6 +152,7 @@ export function AssetTypeTab({
     setEditOpen(false)
     setEditing(null)
     setCreateSeed(null)
+    setFromShotCreateContext(null)
   }
 
   const handleDelete = (asset: StudioAssetLike) => {
@@ -262,6 +281,9 @@ export function AssetTypeTab({
         label={label}
         entityType={tabKey}
         editing={editing}
+        linkProjectId={fromShotCreateContext?.projectId}
+        linkChapterId={fromShotCreateContext?.chapterId}
+        linkShotId={fromShotCreateContext?.shotId}
         createAsset={createAsset}
         updateAsset={updateAsset}
         onCancel={handleModalCancel}

@@ -589,7 +589,7 @@ export function ChapterShotEditPage() {
 
   const handleNewAsset = useCallback(
     async (asset: AssetVM) => {
-      if (!projectId || !shotId) return
+      if (!projectId || !chapterId || !shotId) return
       const name = asset.name.trim()
       if (!name) return
       try {
@@ -624,11 +624,19 @@ export function ChapterShotEditPage() {
             cancelText: '取消',
             onOk: () => {
               const open = (url: string) => window.open(url, '_blank', 'noopener,noreferrer')
+              const descQ = asset.description?.trim()
+                ? `&desc=${encodeURIComponent(asset.description.trim())}`
+                : ''
+              const ctxQ = `&projectId=${encodeURIComponent(projectId)}&chapterId=${encodeURIComponent(chapterId)}&shotId=${encodeURIComponent(shotId)}`
               if (asset.kind === 'scene' || asset.kind === 'prop' || asset.kind === 'costume') {
-                open(`/assets?tab=${asset.kind}&create=1&name=${encodeURIComponent(name)}${asset.description?.trim() ? `&desc=${encodeURIComponent(asset.description.trim())}` : ''}`)
+                open(
+                  `/assets?tab=${asset.kind}&create=1&name=${encodeURIComponent(name)}${descQ}${ctxQ}`,
+                )
                 return
               }
-              open(`/projects/${projectId}?tab=roles&create=1&name=${encodeURIComponent(name)}${asset.description?.trim() ? `&desc=${encodeURIComponent(asset.description.trim())}` : ''}`)
+              open(
+                `/projects/${encodeURIComponent(projectId)}?tab=roles&create=1&name=${encodeURIComponent(name)}${descQ}${ctxQ}`,
+              )
             },
           })
           return
@@ -648,7 +656,7 @@ export function ChapterShotEditPage() {
         message.error('existence-check 调用失败')
       }
     },
-    [openLinkingModal, projectId, shotId],
+    [openLinkingModal, chapterId, projectId, shotId],
   )
 
 

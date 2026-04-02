@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card, Button, Empty, Modal, Input, message, Space, Select, Pagination } from 'antd'
 import { EditOutlined, PlusOutlined, UserOutlined } from '@ant-design/icons'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { StudioProjectsService, StudioShotLinksService } from '../../../../../services/generated'
+import {
+  StudioProjectsService,
+  StudioShotCharacterLinksService,
+  StudioShotLinksService,
+} from '../../../../../services/generated'
 import type { ProjectActorLinkRead, ProjectCostumeLinkRead } from '../../../../../services/generated'
 import { useProjectCharacters, newId } from '../hooks/useProjectData'
 import { resolveAssetUrl } from '../../../assets/utils'
@@ -31,6 +35,7 @@ export function RolesTab() {
 
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [pendingShotLinkShotId, setPendingShotLinkShotId] = useState<string | null>(null)
   const [formName, setFormName] = useState('')
   const [formDesc, setFormDesc] = useState('')
   const [formActorId, setFormActorId] = useState<string | undefined>(undefined)
@@ -53,6 +58,8 @@ export function RolesTab() {
       setFormDesc(desc)
       setFormActorId(undefined)
       setFormCostumeId(undefined)
+      const shotIdFromUrl = searchParams.get('shotId')?.trim() ?? ''
+      setPendingShotLinkShotId(shotIdFromUrl || null)
       setCreateOpen(true)
       setSearchParams(
         (prev) => {
@@ -60,12 +67,23 @@ export function RolesTab() {
           next.delete('create')
           next.delete('name')
           next.delete('desc')
+          next.delete('chapterId')
+          next.delete('shotId')
           return next
         },
         { replace: true },
       )
     }
   }, [searchParams, setSearchParams])
+
+  const openNormalRoleCreate = useCallback(() => {
+    setPendingShotLinkShotId(null)
+    setFormName('')
+    setFormDesc('')
+    setFormActorId(undefined)
+    setFormCostumeId(undefined)
+    setCreateOpen(true)
+  }, [])
 
   const loadProjectLinks = async () => {
     if (!projectId) return
@@ -174,7 +192,7 @@ export function RolesTab() {
     }
     setCreating(true)
     try {
-      await StudioEntitiesApi.create('character', {
+      const createRes = await StudioEntitiesApi.create('character', {
         id: newId('char'),
         project_id: projectId,
         name,
@@ -183,15 +201,39 @@ export function RolesTab() {
         actor_id: formActorId,
         costume_id: formCostumeId ?? null,
       })
+      const charId = (createRes.data as { id?: string } | undefined)?.id
+      if (charId && pendingShotLinkShotId) {
+        try {
+          const linksRes = await StudioShotCharacterLinksService.listShotCharacterLinksApiV1StudioShotCharacterLinksGet({
+            shotId: pendingShotLinkShotId,
+          })
+          const links = (linksRes.data ?? []) as Array<{ index?: number | null }>
+          const maxIndex = links.reduce(
+            (m, it) => Math.max(m, typeof it?.index === 'number' ? it.index : -1),
+            -1,
+          )
+          await StudioShotCharacterLinksService.upsertShotCharacterLinkApiV1StudioShotCharacterLinksPost({
+            requestBody: {
+              shot_id: pendingShotLinkShotId,
+              character_id: charId,
+              index: maxIndex + 1,
+            },
+          })
+        } catch {
+          message.warning('角色已创建，但关联到当前分镜失败')
+        }
+      }
       message.success('角色创建成功')
       setCreateOpen(false)
       setFormName('')
       setFormDesc('')
       setFormActorId(undefined)
       setFormCostumeId(undefined)
+      setPendingShotLinkShotId(null)
       await refresh()
     } catch {
       message.error('创建失败')
+      setPendingShotLinkShotId(null)
     } finally {
       setCreating(false)
     }
@@ -256,17 +298,7 @@ export function RolesTab() {
         title="项目角色"
         extra={
           <Space>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setFormName('')
-                setFormDesc('')
-                setFormActorId(undefined)
-                setFormCostumeId(undefined)
-                setCreateOpen(true)
-              }}
-            >
+            <Button type="primary" icon={<PlusOutlined />} onClick={openNormalRoleCreate}>
               新建角色
             </Button>
           </Space>
@@ -278,17 +310,7 @@ export function RolesTab() {
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           >
             <Space>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  setFormName('')
-                  setFormDesc('')
-                  setFormActorId(undefined)
-                  setFormCostumeId(undefined)
-                  setCreateOpen(true)
-                }}
-              >
+              <Button type="primary" icon={<PlusOutlined />} onClick={openNormalRoleCreate}>
                 新建角色
               </Button>
             </Space>
@@ -375,7 +397,10 @@ export function RolesTab() {
       <Modal
         title="新建角色"
         open={createOpen}
-        onCancel={() => setCreateOpen(false)}
+        onCancel={() => {
+          setCreateOpen(false)
+          setPendingShotLinkShotId(null)
+        }}
         onOk={handleCreateRole}
         okText="创建"
         cancelText="取消"

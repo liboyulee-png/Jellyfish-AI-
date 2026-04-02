@@ -53,6 +53,8 @@ export function StudioAssetTypeFormModal({
   entityType: _entityType,
   editing,
   linkProjectId,
+  linkChapterId,
+  linkShotId,
   createAsset,
   updateAsset,
   onCancel,
@@ -65,6 +67,8 @@ export function StudioAssetTypeFormModal({
   entityType: 'scene' | 'prop' | 'costume'
   editing: StudioAssetLike | null
   linkProjectId?: string
+  linkChapterId?: string
+  linkShotId?: string
   createAsset: (payload: AssetCreatePayload) => Promise<StudioAssetLike>
   updateAsset: (id: string, payload: AssetMutationPayload) => Promise<StudioAssetLike>
   onCancel: () => void
@@ -150,6 +154,8 @@ export function StudioAssetTypeFormModal({
           visual_style: formVisualStyle,
           style: formStyle,
           ...(linkProjectId ? { project_id: linkProjectId } : {}),
+          ...(linkProjectId && linkChapterId ? { chapter_id: linkChapterId } : {}),
+          ...(linkProjectId && linkShotId ? { shot_id: linkShotId } : {}),
           ...(nextViewCount === null ? {} : { view_count: nextViewCount }),
         })
         message.success('已创建')
